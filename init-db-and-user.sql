@@ -1,0 +1,3 @@
+CREATE USER rdc WITH PASSWORD 'rdc';
+CREATE DATABASE rawdata_client;
+GRANT ALL PRIVILEGES ON DATABASE rawdata_client TO rdc;
