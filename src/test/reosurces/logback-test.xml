@@ -10,6 +10,7 @@
         </encoder>
     </appender>
 
+    <logger name="com.zaxxer.hikari" level="INFO"/>
     <logger name="no.ssb.rawdata" level="TRACE"/>
 
     <root level="INFO">
