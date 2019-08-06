@@ -1,4 +1,4 @@
-# rawdata-client-state-provider-postgres
+# rawdata-client-provider-postgres
 
 ## Start and initialize database
 
