@@ -1,4 +1,6 @@
-package no.ssb.rawdata.provider.postgres;
+package no.ssb.rawdata.provider.postgres.tx;
+
+import no.ssb.rawdata.provider.postgres.PersistenceException;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
