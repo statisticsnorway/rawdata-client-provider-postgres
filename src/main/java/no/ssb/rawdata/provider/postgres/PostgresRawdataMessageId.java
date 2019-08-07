@@ -6,9 +6,12 @@ import java.util.Objects;
 
 class PostgresRawdataMessageId implements RawdataMessageId {
     final String topic;
-    final int index;
+    final long index;
 
-    PostgresRawdataMessageId(String topic, int index) {
+    PostgresRawdataMessageId(String topic, long index) {
+//        if (index == -1L) {
+//            throw new IllegalStateException("The index must be assigned!");
+//        }
         this.topic = topic;
         this.index = index;
     }

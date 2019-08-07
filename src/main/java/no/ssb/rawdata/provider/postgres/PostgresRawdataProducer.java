@@ -6,52 +6,122 @@ import no.ssb.rawdata.api.RawdataMessageContent;
 import no.ssb.rawdata.api.RawdataMessageId;
 import no.ssb.rawdata.api.RawdataProducer;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-public class PostgresRawdataProducer implements RawdataProducer {
-    
+class PostgresRawdataProducer implements RawdataProducer {
+
+    private final PostgresRawdataTopic topic;
+    private final Map<String, PostgresRawdataMessageContent> buffer = new ConcurrentHashMap<>();
+    private final AtomicBoolean closed = new AtomicBoolean(false);
+
+    PostgresRawdataProducer(PostgresRawdataTopic topic) {
+        this.topic = topic;
+    }
+
     @Override
     public String topic() {
-        return null;
+        return topic.topic;
     }
 
     @Override
     public String lastExternalId() throws RawdataClosedException {
-        return null;
+        if (isClosed()) {
+            throw new RawdataClosedException();
+        }
+        topic.tryLock(5, TimeUnit.SECONDS);
+        try {
+            PostgresRawdataMessageId lastMessageId = topic.lastMessageId();
+            if (lastMessageId == null) {
+                return null;
+            }
+            return topic.read(lastMessageId).content().externalId();
+        } finally {
+            topic.unlock();
+        }
     }
 
     @Override
     public RawdataMessageContent.Builder builder() throws RawdataClosedException {
-        return null;
+        if (isClosed()) {
+            throw new RawdataClosedException();
+        }
+        return new RawdataMessageContent.Builder() {
+            String externalId;
+            Map<String, byte[]> data = new LinkedHashMap<>();
+
+            @Override
+            public RawdataMessageContent.Builder externalId(String externalId) {
+                this.externalId = externalId;
+                return this;
+            }
+
+            @Override
+            public RawdataMessageContent.Builder put(String key, byte[] payload) {
+                data.put(key, payload);
+                return this;
+            }
+
+            @Override
+            public PostgresRawdataMessageContent build() {
+                return new PostgresRawdataMessageContent(externalId, data);
+            }
+        };
     }
 
     @Override
     public RawdataMessageContent buffer(RawdataMessageContent.Builder builder) throws RawdataClosedException {
-        return null;
+        return buffer(builder.build());
     }
 
     @Override
     public RawdataMessageContent buffer(RawdataMessageContent content) throws RawdataClosedException {
-        return null;
+        if (isClosed()) {
+            throw new RawdataClosedException();
+        }
+        buffer.put(content.externalId(), (PostgresRawdataMessageContent) content);
+        return content;
     }
 
     @Override
     public List<? extends RawdataMessageId> publish(List<String> externalIds) throws RawdataClosedException, RawdataContentNotBufferedException {
-        return null;
+        return publish(externalIds.toArray(new String[externalIds.size()]));
     }
 
     @Override
     public List<? extends RawdataMessageId> publish(String... externalIds) throws RawdataClosedException, RawdataContentNotBufferedException {
-        return null;
+        if (isClosed()) {
+            throw new RawdataClosedException();
+        }
+        topic.tryLock(5, TimeUnit.SECONDS);
+        try {
+            List<PostgresRawdataMessageId> messageIds = new ArrayList<>();
+            for (String externalId : externalIds) {
+                PostgresRawdataMessageContent content = buffer.remove(externalId);
+                if (content == null) {
+                    throw new RawdataContentNotBufferedException(String.format("externalId %s has not been buffered", externalId));
+                }
+                PostgresRawdataMessageId messageId = topic.write(content);
+                messageIds.add(messageId);
+            }
+            return messageIds;
+        } finally {
+            topic.unlock();
+        }
     }
 
     @Override
     public boolean isClosed() {
-        return false;
+        return closed.get();
     }
 
     @Override
     public void close() throws Exception {
-
+        closed.set(true);
     }
 }

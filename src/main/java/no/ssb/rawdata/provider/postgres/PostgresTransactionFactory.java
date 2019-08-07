@@ -1,7 +1,8 @@
-package no.ssb.rawdata.provider.postgres.tx;
+package no.ssb.rawdata.provider.postgres;
 
 import com.zaxxer.hikari.HikariDataSource;
-import no.ssb.rawdata.provider.postgres.PersistenceException;
+import no.ssb.rawdata.provider.postgres.tx.Transaction;
+import no.ssb.rawdata.provider.postgres.tx.TransactionFactory;
 
 import java.sql.Connection;
 import java.sql.SQLException;

@@ -1,4 +1,4 @@
-package no.ssb.rawdata.provider.postgres.tx;
+package no.ssb.rawdata.provider.postgres;
 
 import java.io.IOException;
 import java.io.InputStream;

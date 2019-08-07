@@ -4,8 +4,6 @@ import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import no.ssb.rawdata.api.RawdataClient;
 import no.ssb.rawdata.api.RawdataClientInitializer;
-import no.ssb.rawdata.provider.postgres.tx.FileAndClasspathReaderUtils;
-import no.ssb.rawdata.provider.postgres.tx.PostgresTransactionFactory;
 import no.ssb.service.provider.api.ProviderName;
 
 import java.io.PrintWriter;
@@ -82,7 +80,7 @@ public class PostgresRawdataClientInitializer implements RawdataClientInitialize
     static void dropOrCreateDatabase(HikariDataSource datasource) {
         try {
             String initSQL = FileAndClasspathReaderUtils.readFileOrClasspathResource("postgres/init-db.sql");
-            System.out.printf("initSQL: %s%n", initSQL);
+//            System.out.printf("initSQL: %s%n", initSQL);
             Connection conn = datasource.getConnection();
             conn.beginRequest();
 
