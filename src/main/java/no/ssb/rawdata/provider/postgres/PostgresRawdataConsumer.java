@@ -42,6 +42,11 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
     }
 
     @Override
+    public boolean hasMessageAvailable() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public RawdataMessage receive(int timeout, TimeUnit timeUnit) throws InterruptedException, RawdataClosedException {
         long expireTimeNano = System.nanoTime() + timeUnit.toNanos(timeout);
         topic.tryLock(5, TimeUnit.SECONDS);
