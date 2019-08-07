@@ -21,7 +21,7 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
     }
 
     @Override
-    public RawdataMessage receive(long timeout, TimeUnit timeUnit) throws InterruptedException, RawdataClosedException {
+    public RawdataMessage receive(int timeout, TimeUnit timeUnit) throws InterruptedException, RawdataClosedException {
         return null;
     }
 

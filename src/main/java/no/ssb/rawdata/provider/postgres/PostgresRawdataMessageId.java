@@ -5,7 +5,6 @@ import no.ssb.rawdata.api.RawdataMessageId;
 import java.util.Objects;
 
 class PostgresRawdataMessageId implements RawdataMessageId {
-
     final String topic;
     final int index;
 

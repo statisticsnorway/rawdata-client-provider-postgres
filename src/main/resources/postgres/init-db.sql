@@ -14,8 +14,8 @@ CREATE TABLE position
 
 CREATE TABLE content
 (
-    id             int     NOT NULL,
-    position_fk_id varchar NOT NULL,
+    id             int NOT NULL,
+    position_fk_id int NOT NULL,
     PRIMARY KEY (id),
     FOREIGN KEY (position_fk_id) REFERENCES position (id)
 );

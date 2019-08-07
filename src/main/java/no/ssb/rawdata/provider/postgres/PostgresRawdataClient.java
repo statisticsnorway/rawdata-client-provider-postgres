@@ -33,7 +33,6 @@ public class PostgresRawdataClient implements RawdataClient {
 
     @Override
     public void close() throws Exception {
-
         transactionFactory.close();
     }
 }
