@@ -5,6 +5,8 @@ import no.ssb.rawdata.api.RawdataContentNotBufferedException;
 import no.ssb.rawdata.api.RawdataMessageContent;
 import no.ssb.rawdata.api.RawdataMessageId;
 import no.ssb.rawdata.api.RawdataProducer;
+import no.ssb.rawdata.provider.postgres.tx.Transaction;
+import no.ssb.rawdata.provider.postgres.tx.TransactionFactory;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -22,12 +24,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 class PostgresRawdataProducer implements RawdataProducer {
 
-    private final PostgresTransactionFactory transactionFactory;
+    private final TransactionFactory transactionFactory;
     private final String topic;
     private final Map<String, PostgresRawdataMessageContent> buffer = new ConcurrentHashMap<>();
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
-    PostgresRawdataProducer(PostgresTransactionFactory transactionFactory, String topic) {
+    PostgresRawdataProducer(TransactionFactory transactionFactory, String topic) {
         this.transactionFactory = transactionFactory;
         this.topic = topic;
     }
@@ -42,9 +44,9 @@ class PostgresRawdataProducer implements RawdataProducer {
         if (isClosed()) {
             throw new RawdataClosedException();
         }
-        try (PostgresTransaction tx = transactionFactory.createTransaction(true)) {
+        try (Transaction tx = transactionFactory.createTransaction(true)) {
             try {
-                PreparedStatement ps = tx.connection.prepareStatement("SELECT opaque_id FROM positions WHERE topic = ? ORDER BY id DESC LIMIT 1");
+                PreparedStatement ps = tx.connection().prepareStatement("SELECT opaque_id FROM positions WHERE topic = ? ORDER BY id DESC LIMIT 1");
                 ps.setString(1, topic);
                 ResultSet rs = ps.executeQuery();
                 if (rs.next()) {
@@ -136,9 +138,9 @@ class PostgresRawdataProducer implements RawdataProducer {
             }
         }
         Map<String, Long> idByOpaqueId = new LinkedHashMap<>();
-        try (PostgresTransaction tx = transactionFactory.createTransaction(false)) {
+        try (Transaction tx = transactionFactory.createTransaction(false)) {
 
-            PreparedStatement positionUpdate = tx.connection.prepareStatement("INSERT INTO positions (topic, opaque_id, ts) VALUES (?, ?, ?) RETURNING id");
+            PreparedStatement positionUpdate = tx.connection().prepareStatement("INSERT INTO positions (topic, opaque_id, ts) VALUES (?, ?, ?) RETURNING id");
             for (String opaqueId : opaqueIds) {
                 positionUpdate.setString(1, topic);
                 positionUpdate.setString(2, opaqueId);
@@ -149,7 +151,7 @@ class PostgresRawdataProducer implements RawdataProducer {
                 }
             }
 
-            PreparedStatement contentUpdate = tx.connection.prepareStatement("INSERT INTO content (position_fk_id, name, data) VALUES (?, ?, ?)");
+            PreparedStatement contentUpdate = tx.connection().prepareStatement("INSERT INTO content (position_fk_id, name, data) VALUES (?, ?, ?)");
             for (String opaqueId : opaqueIds) {
                 long id = idByOpaqueId.get(opaqueId);
                 PostgresRawdataMessageContent content = buffer.get(opaqueId);

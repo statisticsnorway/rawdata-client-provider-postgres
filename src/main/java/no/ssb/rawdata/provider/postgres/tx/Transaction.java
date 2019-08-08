@@ -1,8 +1,11 @@
 package no.ssb.rawdata.provider.postgres.tx;
 
+import java.sql.Connection;
 import java.util.concurrent.CompletableFuture;
 
 public interface Transaction extends AutoCloseable {
+
+    Connection connection();
 
     CompletableFuture<TransactionStatistics> commit();
 

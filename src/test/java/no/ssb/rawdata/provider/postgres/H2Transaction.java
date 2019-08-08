@@ -7,12 +7,12 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.concurrent.CompletableFuture;
 
-class PostgresTransaction implements Transaction {
+class H2Transaction implements Transaction {
 
     final Connection connection;
     final TransactionStatistics statistics = new TransactionStatistics();
 
-    public PostgresTransaction(Connection connection) throws SQLException {
+    public H2Transaction(Connection connection) throws SQLException {
         this.connection = connection;
         connection.beginRequest();
     }

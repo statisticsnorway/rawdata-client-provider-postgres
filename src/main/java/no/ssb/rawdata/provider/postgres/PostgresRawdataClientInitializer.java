@@ -4,9 +4,11 @@ import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import no.ssb.rawdata.api.RawdataClient;
 import no.ssb.rawdata.api.RawdataClientInitializer;
+import no.ssb.rawdata.provider.postgres.tx.TransactionFactory;
 import no.ssb.service.provider.api.ProviderName;
 
 import java.io.PrintWriter;
+import java.lang.reflect.InvocationTargetException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -35,27 +37,58 @@ public class PostgresRawdataClientInitializer implements RawdataClientInitialize
     }
 
     @Override
-    public RawdataClient initialize(Map<String, String> configuration) {
-        HikariDataSource dataSource = openDataSource(configuration);
-        return new PostgresRawdataClient(new PostgresTransactionFactory(dataSource));
+    public RawdataClient initialize(Map<String, String> configMap) {
+        boolean disablePostgresDatabase = Boolean.parseBoolean(configMap.get("postgres.driver.disabled"));
+
+        if (!disablePostgresDatabase) {
+            HikariDataSource dataSource = openPostgresDataSource(
+                    configMap.get("postgres.driver.host"),
+                    configMap.get("postgres.driver.port"),
+                    configMap.get("postgres.driver.user"),
+                    configMap.get("postgres.driver.password"),
+                    configMap.get("postgres.driver.database"),
+                    Boolean.parseBoolean(configMap.get("postgres.dropOrCreateDb")));
+
+            return new PostgresRawdataClient(new PostgresTransactionFactory(dataSource));
+
+        } else {
+            HikariDataSource dataSource = openH2DataSource(configMap.get("h2.driver.url"),
+                    "sa",
+                    "sa",
+                    Boolean.parseBoolean(configMap.get("postgres.dropOrCreateDb"))
+            );
+
+            try {
+                Class<? extends TransactionFactory> transactionFactoryClass = (Class<? extends TransactionFactory>) Class.forName("no.ssb.rawdata.provider.postgres.H2TransactionFactory");
+                TransactionFactory transactionFactory = transactionFactoryClass.getDeclaredConstructor(HikariDataSource.class).newInstance(dataSource);
+                return new PostgresRawdataClient(transactionFactory);
+
+            } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 
     public static HikariDataSource openDataSource(Map<String, String> configMap) {
-        String postgresDbDriverHost = configMap.get("postgres.driver.host");
-        String postgresDbDriverPort = configMap.get("postgres.driver.port");
-        HikariDataSource dataSource = PostgresRawdataClientInitializer.openDataSource(
-                postgresDbDriverHost,
-                postgresDbDriverPort,
-                configMap.get("postgres.driver.user"),
-                configMap.get("postgres.driver.password"),
-                configMap.get("postgres.driver.database"),
-                Boolean.parseBoolean(configMap.get("postgres.dropOrCreateDb"))
-        );
-        return dataSource;
+        boolean usePostgreesDatabase = Boolean.parseBoolean(configMap.get("postgres.driver.enabled"));
+        return usePostgreesDatabase ?
+                openPostgresDataSource(
+                        configMap.get("postgres.driver.host"),
+                        configMap.get("postgres.driver.port"),
+                        configMap.get("postgres.driver.user"),
+                        configMap.get("postgres.driver.password"),
+                        configMap.get("postgres.driver.database"),
+                        Boolean.parseBoolean(configMap.get("postgres.dropOrCreateDb"))) :
+
+                openH2DataSource(configMap.get("h2.driver.url"),
+                        "sa",
+                        "sa",
+                        Boolean.parseBoolean(configMap.get("postgres.dropOrCreateDb"))
+                );
     }
 
     // https://github.com/brettwooldridge/HikariCP
-    static HikariDataSource openDataSource(String postgresDbDriverHost, String postgresDbDriverPort, String postgresDbDriverUser, String postgresDbDriverPassword, String postgresDbDriverDatabase, boolean dropOrCreateDb) {
+    static HikariDataSource openPostgresDataSource(String postgresDbDriverHost, String postgresDbDriverPort, String postgresDbDriverUser, String postgresDbDriverPassword, String postgresDbDriverDatabase, boolean dropOrCreateDb) {
         Properties props = new Properties();
         props.setProperty("dataSourceClassName", "org.postgresql.ds.PGSimpleDataSource");
         props.setProperty("dataSource.serverName", postgresDbDriverHost);
@@ -76,6 +109,27 @@ public class PostgresRawdataClientInitializer implements RawdataClientInitialize
 
         return datasource;
     }
+
+    // https://github.com/brettwooldridge/HikariCP
+    static HikariDataSource openH2DataSource(String jdbcUrl, String username, String password, boolean dropOrCreateDb) {
+        Properties props = new Properties();
+        props.setProperty("jdbcUrl", jdbcUrl);
+        props.setProperty("username", username);
+        props.setProperty("password", password);
+        props.put("dataSource.logWriter", new PrintWriter(System.out));
+
+        HikariConfig config = new HikariConfig(props);
+        config.setAutoCommit(false);
+        config.setMaximumPoolSize(10);
+        HikariDataSource datasource = new HikariDataSource(config);
+
+        if (dropOrCreateDb) {
+            dropOrCreateDatabase(datasource);
+        }
+
+        return datasource;
+    }
+
 
     static void dropOrCreateDatabase(HikariDataSource datasource) {
         try {

@@ -4,6 +4,8 @@ import no.ssb.rawdata.api.RawdataClosedException;
 import no.ssb.rawdata.api.RawdataConsumer;
 import no.ssb.rawdata.api.RawdataMessage;
 import no.ssb.rawdata.api.RawdataMessageId;
+import no.ssb.rawdata.provider.postgres.tx.Transaction;
+import no.ssb.rawdata.provider.postgres.tx.TransactionFactory;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -20,7 +22,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class PostgresRawdataConsumer implements RawdataConsumer {
 
-    final PostgresTransactionFactory transactionFactory;
+    final TransactionFactory transactionFactory;
     final String topic;
     final String subscription;
     final AtomicReference<PostgresRawdataMessageId> position = new AtomicReference<>();
@@ -28,7 +30,7 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
     final Lock pollLock = new ReentrantLock();
     final Condition condition = pollLock.newCondition();
 
-    public PostgresRawdataConsumer(PostgresTransactionFactory transactionFactory, String topic, String subscription) {
+    public PostgresRawdataConsumer(TransactionFactory transactionFactory, String topic, String subscription) {
         this.transactionFactory = transactionFactory;
         this.topic = topic;
         this.subscription = subscription;
@@ -45,9 +47,9 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
     }
 
     Long getLastAckedPositionOfSubscription() {
-        try (PostgresTransaction tx = transactionFactory.createTransaction(true)) {
+        try (Transaction tx = transactionFactory.createTransaction(true)) {
             try {
-                PreparedStatement ps = tx.connection.prepareStatement("SELECT position FROM subscription WHERE topic = ? AND subscription = ?");
+                PreparedStatement ps = tx.connection().prepareStatement("SELECT position FROM subscription WHERE topic = ? AND subscription = ?");
                 ps.setString(1, topic);
                 ps.setString(2, subscription);
                 ResultSet rs = ps.executeQuery();
@@ -62,9 +64,9 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
     }
 
     void createNewPersistentSubscription(long initialPosition) {
-        try (PostgresTransaction tx = transactionFactory.createTransaction(true)) {
+        try (Transaction tx = transactionFactory.createTransaction(true)) {
             try {
-                PreparedStatement ps = tx.connection.prepareStatement("INSERT INTO subscription (topic, subscription, position) VALUES (?, ?, ?)");
+                PreparedStatement ps = tx.connection().prepareStatement("INSERT INTO subscription (topic, subscription, position) VALUES (?, ?, ?)");
                 ps.setString(1, topic);
                 ps.setString(2, subscription);
                 ps.setLong(3, initialPosition);
@@ -76,9 +78,9 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
     }
 
     String getOpaqueIdOfId(long id) {
-        try (PostgresTransaction tx = transactionFactory.createTransaction(true)) {
+        try (Transaction tx = transactionFactory.createTransaction(true)) {
             try {
-                PreparedStatement ps = tx.connection.prepareStatement("SELECT opaqueId FROM positions WHERE id = ?");
+                PreparedStatement ps = tx.connection().prepareStatement("SELECT opaqueId FROM positions WHERE id = ?");
                 ps.setLong(1, id);
                 ResultSet rs = ps.executeQuery();
                 if (rs.next()) {
@@ -105,9 +107,9 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
         Map<String, byte[]> contentMap = new LinkedHashMap<>();
         long id = -1;
         String opaqueId = null;
-        try (PostgresTransaction tx = transactionFactory.createTransaction(true)) {
+        try (Transaction tx = transactionFactory.createTransaction(true)) {
             try {
-                PreparedStatement ps = tx.connection.prepareStatement("SELECT c.name, c.data, p.id, p.opaque_id FROM content c JOIN (SELECT id, opaque_id FROM positions WHERE topic = ? AND id > ? ORDER BY id LIMIT 1) p ON c.position_fk_id = p.id ORDER BY c.id");
+                PreparedStatement ps = tx.connection().prepareStatement("SELECT c.name, c.data, p.id, p.opaque_id FROM content c JOIN (SELECT id, opaque_id FROM positions WHERE topic = ? AND id > ? ORDER BY id LIMIT 1) p ON c.position_fk_id = p.id ORDER BY c.id");
                 ps.setString(1, topic);
                 ps.setLong(2, currentId.id);
                 ResultSet rs = ps.executeQuery();
@@ -172,9 +174,9 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
         if (isClosed()) {
             throw new RawdataClosedException();
         }
-        try (PostgresTransaction tx = transactionFactory.createTransaction(true)) {
+        try (Transaction tx = transactionFactory.createTransaction(true)) {
             try {
-                PreparedStatement ps = tx.connection.prepareStatement("UPDATE subscription SET position = ? WHERE topic = ? AND subscription = ?");
+                PreparedStatement ps = tx.connection().prepareStatement("UPDATE subscription SET position = ? WHERE topic = ? AND subscription = ?");
                 ps.setLong(1, ((PostgresRawdataMessageId) id).id);
                 ps.setString(2, topic);
                 ps.setString(3, subscription);

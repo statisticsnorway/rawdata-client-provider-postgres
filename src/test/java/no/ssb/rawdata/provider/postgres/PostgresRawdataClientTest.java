@@ -30,6 +30,8 @@ public class PostgresRawdataClientTest {
                 .propertiesResource("application-test.properties")
                 .values("rawdata.client.provider", "postgres")
                 .values("postgres.dropOrCreateDb", "true")
+                .values("postgres.driver.disabled", "false")
+                .values("h2.driver.url", "jdbc:h2:mem:rdc;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE")
                 .build();
     }
 

@@ -3,6 +3,7 @@ package no.ssb.rawdata.provider.postgres;
 import no.ssb.rawdata.api.RawdataClient;
 import no.ssb.rawdata.api.RawdataConsumer;
 import no.ssb.rawdata.api.RawdataProducer;
+import no.ssb.rawdata.provider.postgres.tx.TransactionFactory;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -13,9 +14,9 @@ public class PostgresRawdataClient implements RawdataClient {
     final AtomicBoolean closed = new AtomicBoolean(false);
     final List<PostgresRawdataProducer> producers = new CopyOnWriteArrayList<>();
     final List<PostgresRawdataConsumer> consumers = new CopyOnWriteArrayList<>();
-    private final PostgresTransactionFactory transactionFactory;
+    private final TransactionFactory transactionFactory;
 
-    public PostgresRawdataClient(PostgresTransactionFactory transactionFactory) {
+    public PostgresRawdataClient(TransactionFactory transactionFactory) {
         this.transactionFactory = transactionFactory;
     }
 

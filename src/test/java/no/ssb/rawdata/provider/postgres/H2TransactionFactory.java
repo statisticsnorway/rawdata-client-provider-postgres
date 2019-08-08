@@ -10,11 +10,11 @@ import java.sql.SQLException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
-public class PostgresTransactionFactory implements TransactionFactory {
+public class H2TransactionFactory implements TransactionFactory {
 
     final HikariDataSource dataSource;
 
-    public PostgresTransactionFactory(HikariDataSource dataSource) {
+    public H2TransactionFactory(HikariDataSource dataSource) {
         this.dataSource = dataSource;
     }
 
@@ -24,11 +24,11 @@ public class PostgresTransactionFactory implements TransactionFactory {
     }
 
     @Override
-    public PostgresTransaction createTransaction(boolean readOnly) throws PersistenceException {
+    public H2Transaction createTransaction(boolean readOnly) throws PersistenceException {
         try {
             Connection connection = dataSource.getConnection();
             connection.setAutoCommit(false);
-            return new PostgresTransaction(connection);
+            return new H2Transaction(connection);
         } catch (SQLException e) {
             throw new PersistenceException(e);
         }

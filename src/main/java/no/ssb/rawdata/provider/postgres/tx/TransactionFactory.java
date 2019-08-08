@@ -2,6 +2,7 @@ package no.ssb.rawdata.provider.postgres.tx;
 
 import no.ssb.rawdata.provider.postgres.PersistenceException;
 
+import javax.sql.DataSource;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
@@ -34,6 +35,8 @@ public interface TransactionFactory {
      * @throws PersistenceException
      */
     Transaction createTransaction(boolean readOnly) throws PersistenceException;
+
+    DataSource dataSource();
 
     /**
      * Close all resources associated with this transaction-factory. Such resources will typically be open-transactions,
