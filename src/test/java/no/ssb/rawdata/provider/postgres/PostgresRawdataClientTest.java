@@ -20,7 +20,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
 public class PostgresRawdataClientTest {
@@ -75,24 +74,6 @@ public class PostgresRawdataClientTest {
     public void thatPublishNonBufferedMessagesThrowsException() {
         RawdataProducer producer = client.producer("the-topic");
         producer.publish("unbuffered-1");
-    }
-
-    @Test
-    public void thatHasAvailableMessageWorks() throws InterruptedException {
-        RawdataProducer producer = client.producer("the-topic");
-        RawdataConsumer consumer = client.consumer("the-topic", "sub1");
-
-        assertFalse(consumer.hasMessageAvailable());
-
-        RawdataMessageContent expected1 = producer.buffer(producer.builder().externalId("a").put("payload", new byte[5]));
-        RawdataMessageContent expected2 = producer.buffer(producer.builder().externalId("b").put("payload", new byte[3]));
-        producer.publish(expected1.externalId(), expected2.externalId());
-
-        assertTrue(consumer.hasMessageAvailable());
-        consumer.receive(3, TimeUnit.SECONDS);
-        assertTrue(consumer.hasMessageAvailable());
-        consumer.receive(3, TimeUnit.SECONDS);
-        assertFalse(consumer.hasMessageAvailable());
     }
 
     @Test

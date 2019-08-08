@@ -101,20 +101,6 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
         return subscription;
     }
 
-    @Override
-    public boolean hasMessageAvailable() {
-        try (PostgresTransaction tx = transactionFactory.createTransaction(true)) {
-            try {
-                PreparedStatement ps = tx.connection.prepareStatement("SELECT id FROM positions WHERE id > ? ORDER BY id DESC LIMIT 1");
-                ps.setLong(1, position.get().id);
-                ResultSet rs = ps.executeQuery();
-                return rs.next();
-            } catch (SQLException e) {
-                throw new PersistenceException(e);
-            }
-        }
-    }
-
     PostgresRawdataMessage findMessageContentOfIdAfterPosition(PostgresRawdataMessageId currentId) {
         Map<String, byte[]> contentMap = new LinkedHashMap<>();
         long id = -1;
