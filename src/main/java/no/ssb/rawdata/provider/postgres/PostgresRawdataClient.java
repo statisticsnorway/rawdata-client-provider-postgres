@@ -5,15 +5,11 @@ import no.ssb.rawdata.api.RawdataConsumer;
 import no.ssb.rawdata.api.RawdataProducer;
 
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class PostgresRawdataClient implements RawdataClient {
 
-    final Map<String, PostgresRawdataTopic> topicByName = new ConcurrentHashMap<>();
-    final Map<String, Map<String, PostgresRawdataConsumer>> subscriptionByNameByTopic = new ConcurrentHashMap<>();
     final AtomicBoolean closed = new AtomicBoolean(false);
     final List<PostgresRawdataProducer> producers = new CopyOnWriteArrayList<>();
     final List<PostgresRawdataConsumer> consumers = new CopyOnWriteArrayList<>();
@@ -25,7 +21,7 @@ public class PostgresRawdataClient implements RawdataClient {
 
     @Override
     public RawdataProducer producer(String topicName) {
-        PostgresRawdataProducer producer = new PostgresRawdataProducer(topicByName.computeIfAbsent(topicName, t -> new PostgresRawdataTopic(transactionFactory, t)));
+        PostgresRawdataProducer producer = new PostgresRawdataProducer(transactionFactory, topicName);
         this.producers.add(producer);
         return producer;
 
@@ -33,12 +29,7 @@ public class PostgresRawdataClient implements RawdataClient {
 
     @Override
     public RawdataConsumer consumer(String topicName, String subscription) {
-        PostgresRawdataConsumer consumer = subscriptionByNameByTopic.computeIfAbsent(topicName, tn -> new ConcurrentHashMap<>())
-                .computeIfAbsent(subscription, s ->
-                        new PostgresRawdataConsumer(topicByName.computeIfAbsent(topicName, t ->
-                                new PostgresRawdataTopic(transactionFactory, t)), s, new PostgresRawdataMessageId(topicName, -1L)
-                        )
-                );
+        PostgresRawdataConsumer consumer = new PostgresRawdataConsumer(transactionFactory, topicName, subscription);
         consumers.add(consumer);
         return consumer;
     }

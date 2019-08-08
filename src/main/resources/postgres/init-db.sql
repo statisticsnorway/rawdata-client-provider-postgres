@@ -15,7 +15,7 @@ CREATE TABLE positions
 CREATE TABLE content
 (
     id             serial  NOT NULL,
-    position_fk_id int     NOT NULL,
+    position_fk_id int     NOT NULL, /* TODO CREATE INDEX ON THIS FIELD */
     name           varchar NOT NULL,
     data           bytea   NOT NULL,
     PRIMARY KEY (id),
@@ -24,10 +24,8 @@ CREATE TABLE content
 
 CREATE TABLE subscription
 (
-    id           serial  NOT NULL,
     topic        varchar NOT NULL,
     subscription varchar NOT NULL,
-    position     varchar NOT NULL,
-    PRIMARY KEY (id),
-    UNIQUE (topic, subscription, position)
+    position     int NOT NULL,
+    PRIMARY KEY (topic, subscription)
 );

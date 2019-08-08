@@ -50,7 +50,7 @@ public class PostgresRawdataMessageContent implements RawdataMessageContent {
 
     @Override
     public int hashCode() {
-        return Objects.hash(externalId, data);
+        return Objects.hash(externalId);
     }
 
     @Override

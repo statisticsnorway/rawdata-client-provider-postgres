@@ -12,7 +12,6 @@ import no.ssb.rawdata.api.RawdataProducer;
 import no.ssb.service.provider.api.ProviderConfigurator;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Ignore;
 import org.testng.annotations.Test;
 
 import java.util.ArrayList;
@@ -21,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
 public class PostgresRawdataClientTest {
@@ -78,6 +78,24 @@ public class PostgresRawdataClientTest {
     }
 
     @Test
+    public void thatHasAvailableMessageWorks() throws InterruptedException {
+        RawdataProducer producer = client.producer("the-topic");
+        RawdataConsumer consumer = client.consumer("the-topic", "sub1");
+
+        assertFalse(consumer.hasMessageAvailable());
+
+        RawdataMessageContent expected1 = producer.buffer(producer.builder().externalId("a").put("payload", new byte[5]));
+        RawdataMessageContent expected2 = producer.buffer(producer.builder().externalId("b").put("payload", new byte[3]));
+        producer.publish(expected1.externalId(), expected2.externalId());
+
+        assertTrue(consumer.hasMessageAvailable());
+        consumer.receive(3, TimeUnit.SECONDS);
+        assertTrue(consumer.hasMessageAvailable());
+        consumer.receive(3, TimeUnit.SECONDS);
+        assertFalse(consumer.hasMessageAvailable());
+    }
+
+    @Test
     public void thatSingleMessageCanBeProducedAndConsumerSynchronously() throws InterruptedException {
         RawdataProducer producer = client.producer("the-topic");
         RawdataConsumer consumer = client.consumer("the-topic", "sub1");
@@ -103,7 +121,6 @@ public class PostgresRawdataClientTest {
         assertEquals(message.content(), expected1);
     }
 
-    @Ignore
     @Test
     public void thatMultipleMessagesCanBeProducedAndConsumerSynchronously() throws InterruptedException {
         RawdataProducer producer = client.producer("the-topic");
@@ -122,7 +139,6 @@ public class PostgresRawdataClientTest {
         assertEquals(message3.content(), expected3);
     }
 
-    @Ignore
     @Test
     public void thatMultipleMessagesCanBeProducedAndConsumerAsynchronously() {
         RawdataProducer producer = client.producer("the-topic");
@@ -152,7 +168,6 @@ public class PostgresRawdataClientTest {
         });
     }
 
-    @Ignore
     @Test
     public void thatMessagesCanBeConsumedByMultipleConsumers() {
         RawdataProducer producer = client.producer("the-topic");

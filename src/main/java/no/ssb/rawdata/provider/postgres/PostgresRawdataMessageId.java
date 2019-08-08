@@ -6,14 +6,13 @@ import java.util.Objects;
 
 class PostgresRawdataMessageId implements RawdataMessageId {
     final String topic;
-    final long index;
+    final long id;
+    final String opaqueId;
 
-    PostgresRawdataMessageId(String topic, long index) {
-//        if (index == -1L) {
-//            throw new IllegalStateException("The index must be assigned!");
-//        }
+    PostgresRawdataMessageId(String topic, long id, String opaqueId) {
         this.topic = topic;
-        this.index = index;
+        this.id = id;
+        this.opaqueId = opaqueId;
     }
 
     @Override
@@ -21,20 +20,21 @@ class PostgresRawdataMessageId implements RawdataMessageId {
         if (this == o) return true;
         if (!(o instanceof PostgresRawdataMessageId)) return false;
         PostgresRawdataMessageId that = (PostgresRawdataMessageId) o;
-        return index == that.index &&
+        return id == that.id &&
                 Objects.equals(topic, that.topic);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(topic, index);
+        return Objects.hash(topic, id);
     }
 
     @Override
     public String toString() {
         return "PostgresRawdataMessageId{" +
                 "topic='" + topic + '\'' +
-                ", index=" + index +
+                ", id=" + id +
+                ", opaqueId='" + opaqueId + '\'' +
                 '}';
     }
 }

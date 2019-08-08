@@ -6,28 +6,35 @@ import no.ssb.rawdata.api.RawdataMessageContent;
 import no.ssb.rawdata.api.RawdataMessageId;
 import no.ssb.rawdata.api.RawdataProducer;
 
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 class PostgresRawdataProducer implements RawdataProducer {
 
-    private final PostgresRawdataTopic topic;
+    private final PostgresTransactionFactory transactionFactory;
+    private final String topic;
     private final Map<String, PostgresRawdataMessageContent> buffer = new ConcurrentHashMap<>();
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
-    PostgresRawdataProducer(PostgresRawdataTopic topic) {
+    PostgresRawdataProducer(PostgresTransactionFactory transactionFactory, String topic) {
+        this.transactionFactory = transactionFactory;
         this.topic = topic;
     }
 
     @Override
     public String topic() {
-        return topic.topic;
+        return topic;
     }
 
     @Override
@@ -35,15 +42,18 @@ class PostgresRawdataProducer implements RawdataProducer {
         if (isClosed()) {
             throw new RawdataClosedException();
         }
-        topic.tryLock(5, TimeUnit.SECONDS);
-        try {
-            PostgresRawdataMessageId lastMessageId = topic.lastMessageId();
-            if (lastMessageId == null) {
+        try (PostgresTransaction tx = transactionFactory.createTransaction(true)) {
+            try {
+                PreparedStatement ps = tx.connection.prepareStatement("SELECT opaque_id FROM positions WHERE topic = ? ORDER BY id DESC LIMIT 1");
+                ps.setString(1, topic);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) {
+                    return rs.getString(1);
+                }
                 return null;
+            } catch (SQLException e) {
+                throw new PersistenceException(e);
             }
-            return topic.read(lastMessageId).content().externalId();
-        } finally {
-            topic.unlock();
         }
     }
 
@@ -90,35 +100,84 @@ class PostgresRawdataProducer implements RawdataProducer {
     }
 
     @Override
-    public List<? extends RawdataMessageId> publish(List<String> externalIds) throws RawdataClosedException, RawdataContentNotBufferedException {
-        return publish(externalIds.toArray(new String[externalIds.size()]));
+    public List<? extends RawdataMessageId> publish(List<String> opaqueIds) throws RawdataClosedException, RawdataContentNotBufferedException {
+        return publish(opaqueIds.toArray(new String[opaqueIds.size()]));
     }
 
     @Override
-    public List<? extends RawdataMessageId> publish(String... externalIds) throws RawdataClosedException, RawdataContentNotBufferedException {
-        if (isClosed()) {
-            throw new RawdataClosedException();
-        }
-        topic.tryLock(5, TimeUnit.SECONDS);
+    public List<? extends RawdataMessageId> publish(String... opaqueIds) throws RawdataClosedException, RawdataContentNotBufferedException {
         try {
-            List<PostgresRawdataMessageId> messageIds = new ArrayList<>();
-            for (String externalId : externalIds) {
-                PostgresRawdataMessageContent content = buffer.remove(externalId);
-                if (content == null) {
-                    throw new RawdataContentNotBufferedException(String.format("externalId %s has not been buffered", externalId));
-                }
-                PostgresRawdataMessageId messageId = topic.write(content);
-                messageIds.add(messageId);
+            List<CompletableFuture<? extends RawdataMessageId>> futures = publishAsync(opaqueIds);
+            List<PostgresRawdataMessageId> result = new ArrayList<>();
+            for (CompletableFuture<? extends RawdataMessageId> future : futures) {
+                result.add((PostgresRawdataMessageId) future.join());
             }
-            return messageIds;
-        } finally {
-            topic.unlock();
+            return result;
+        } catch (CompletionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RawdataContentNotBufferedException) {
+                throw (RawdataContentNotBufferedException) cause;
+            }
+            if (cause instanceof Error) {
+                throw (Error) cause;
+            }
+            if (cause instanceof RuntimeException) {
+                throw (RuntimeException) cause;
+            }
+            throw e;
         }
     }
 
     @Override
-    public List<CompletableFuture<? extends RawdataMessageId>> publishAsync(String... externalIds) {
-        throw new UnsupportedOperationException();
+    public List<CompletableFuture<? extends RawdataMessageId>> publishAsync(String... opaqueIds) {
+        for (String opaqueId : opaqueIds) {
+            if (!buffer.containsKey(opaqueId)) {
+                throw new RawdataContentNotBufferedException(String.format("opaqueId %s is not in buffer", opaqueId));
+            }
+        }
+        Map<String, Long> idByOpaqueId = new LinkedHashMap<>();
+        try (PostgresTransaction tx = transactionFactory.createTransaction(false)) {
+
+            PreparedStatement positionUpdate = tx.connection.prepareStatement("INSERT INTO positions (topic, opaque_id, ts) VALUES (?, ?, ?) RETURNING id");
+            for (String opaqueId : opaqueIds) {
+                positionUpdate.setString(1, topic);
+                positionUpdate.setString(2, opaqueId);
+                positionUpdate.setTimestamp(3, Timestamp.from(ZonedDateTime.now().toInstant()));
+                ResultSet rs = positionUpdate.executeQuery();
+                if (rs.next()) {
+                    idByOpaqueId.put(opaqueId, rs.getLong(1));
+                }
+            }
+
+            PreparedStatement contentUpdate = tx.connection.prepareStatement("INSERT INTO content (position_fk_id, name, data) VALUES (?, ?, ?)");
+            for (String opaqueId : opaqueIds) {
+                long id = idByOpaqueId.get(opaqueId);
+                PostgresRawdataMessageContent content = buffer.get(opaqueId);
+                for (String contentKey : content.keys()) {
+                    contentUpdate.setLong(1, id);
+                    contentUpdate.setString(2, contentKey);
+                    contentUpdate.setBytes(3, content.get(contentKey));
+                    contentUpdate.addBatch();
+                }
+            }
+            contentUpdate.executeBatch();
+
+        } catch (SQLException e) {
+            throw new PersistenceException(e);
+        }
+
+        // remove from buffer after successful database transaction
+        for (String opaqueId : opaqueIds) {
+            buffer.remove(opaqueId);
+        }
+
+        List<CompletableFuture<? extends RawdataMessageId>> result = new ArrayList<>();
+        for (String opaqueId : opaqueIds) {
+            CompletableFuture<PostgresRawdataMessageId> future = CompletableFuture.completedFuture(new PostgresRawdataMessageId(topic, idByOpaqueId.get(opaqueId), opaqueId));
+            result.add(future);
+        }
+
+        return result;
     }
 
     @Override
@@ -127,7 +186,7 @@ class PostgresRawdataProducer implements RawdataProducer {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         closed.set(true);
     }
 }
