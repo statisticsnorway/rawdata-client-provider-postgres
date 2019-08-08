@@ -140,12 +140,13 @@ class PostgresRawdataProducer implements RawdataProducer {
         Map<String, Long> idByOpaqueId = new LinkedHashMap<>();
         try (Transaction tx = transactionFactory.createTransaction(false)) {
 
-            PreparedStatement positionUpdate = tx.connection().prepareStatement("INSERT INTO positions (topic, opaque_id, ts) VALUES (?, ?, ?) RETURNING id");
+            PreparedStatement positionUpdate = tx.connection().prepareStatement("INSERT INTO positions (topic, opaque_id, ts) VALUES (?, ?, ?)", new String[]{"id"});
             for (String opaqueId : opaqueIds) {
                 positionUpdate.setString(1, topic);
                 positionUpdate.setString(2, opaqueId);
                 positionUpdate.setTimestamp(3, Timestamp.from(ZonedDateTime.now().toInstant()));
-                ResultSet rs = positionUpdate.executeQuery();
+                positionUpdate.executeUpdate();
+                ResultSet rs = positionUpdate.getGeneratedKeys();
                 if (rs.next()) {
                     idByOpaqueId.put(opaqueId, rs.getLong(1));
                 }

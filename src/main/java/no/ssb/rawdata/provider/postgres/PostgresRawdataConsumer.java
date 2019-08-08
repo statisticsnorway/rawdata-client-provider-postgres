@@ -64,7 +64,7 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
     }
 
     void createNewPersistentSubscription(long initialPosition) {
-        try (Transaction tx = transactionFactory.createTransaction(true)) {
+        try (Transaction tx = transactionFactory.createTransaction(false)) {
             try {
                 PreparedStatement ps = tx.connection().prepareStatement("INSERT INTO subscription (topic, subscription, position) VALUES (?, ?, ?)");
                 ps.setString(1, topic);
@@ -174,7 +174,7 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
         if (isClosed()) {
             throw new RawdataClosedException();
         }
-        try (Transaction tx = transactionFactory.createTransaction(true)) {
+        try (Transaction tx = transactionFactory.createTransaction(false)) {
             try {
                 PreparedStatement ps = tx.connection().prepareStatement("UPDATE subscription SET position = ? WHERE topic = ? AND subscription = ?");
                 ps.setLong(1, ((PostgresRawdataMessageId) id).id);

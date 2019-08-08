@@ -6,6 +6,8 @@ import no.ssb.rawdata.api.RawdataClient;
 import no.ssb.rawdata.api.RawdataClientInitializer;
 import no.ssb.rawdata.provider.postgres.tx.TransactionFactory;
 import no.ssb.service.provider.api.ProviderName;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.PrintWriter;
 import java.lang.reflect.InvocationTargetException;
@@ -19,6 +21,8 @@ import java.util.Set;
 
 @ProviderName("postgres")
 public class PostgresRawdataClientInitializer implements RawdataClientInitializer {
+
+    private static final Logger LOG = LoggerFactory.getLogger(PostgresRawdataClientInitializer.class);
 
     @Override
     public String providerId() {
@@ -69,26 +73,9 @@ public class PostgresRawdataClientInitializer implements RawdataClientInitialize
         }
     }
 
-    public static HikariDataSource openDataSource(Map<String, String> configMap) {
-        boolean usePostgreesDatabase = Boolean.parseBoolean(configMap.get("postgres.driver.enabled"));
-        return usePostgreesDatabase ?
-                openPostgresDataSource(
-                        configMap.get("postgres.driver.host"),
-                        configMap.get("postgres.driver.port"),
-                        configMap.get("postgres.driver.user"),
-                        configMap.get("postgres.driver.password"),
-                        configMap.get("postgres.driver.database"),
-                        Boolean.parseBoolean(configMap.get("postgres.dropOrCreateDb"))) :
-
-                openH2DataSource(configMap.get("h2.driver.url"),
-                        "sa",
-                        "sa",
-                        Boolean.parseBoolean(configMap.get("postgres.dropOrCreateDb"))
-                );
-    }
-
     // https://github.com/brettwooldridge/HikariCP
     static HikariDataSource openPostgresDataSource(String postgresDbDriverHost, String postgresDbDriverPort, String postgresDbDriverUser, String postgresDbDriverPassword, String postgresDbDriverDatabase, boolean dropOrCreateDb) {
+        LOG.info("Configured Database: postgres");
         Properties props = new Properties();
         props.setProperty("dataSourceClassName", "org.postgresql.ds.PGSimpleDataSource");
         props.setProperty("dataSource.serverName", postgresDbDriverHost);
@@ -110,8 +97,8 @@ public class PostgresRawdataClientInitializer implements RawdataClientInitialize
         return datasource;
     }
 
-    // https://github.com/brettwooldridge/HikariCP
     static HikariDataSource openH2DataSource(String jdbcUrl, String username, String password, boolean dropOrCreateDb) {
+        LOG.info("Configured Database: h2");
         Properties props = new Properties();
         props.setProperty("jdbcUrl", jdbcUrl);
         props.setProperty("username", username);
