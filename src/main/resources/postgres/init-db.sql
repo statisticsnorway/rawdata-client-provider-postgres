@@ -26,6 +26,6 @@ CREATE TABLE subscription
 (
     topic        varchar NOT NULL,
     subscription varchar NOT NULL,
-    position     int NOT NULL,
+    position     int     NOT NULL,
     PRIMARY KEY (topic, subscription)
 );
