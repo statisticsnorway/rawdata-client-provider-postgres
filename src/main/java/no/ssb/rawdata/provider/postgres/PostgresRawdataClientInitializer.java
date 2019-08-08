@@ -56,7 +56,8 @@ public class PostgresRawdataClientInitializer implements RawdataClientInitialize
             return new PostgresRawdataClient(new PostgresTransactionFactory(dataSource));
 
         } else {
-            HikariDataSource dataSource = openH2DataSource(configMap.get("h2.driver.url"),
+            HikariDataSource dataSource = openH2DataSource(
+                    configMap.get("h2.driver.url"),
                     "sa",
                     "sa",
                     Boolean.parseBoolean(configMap.get("postgres.dropOrCreateDb"))
