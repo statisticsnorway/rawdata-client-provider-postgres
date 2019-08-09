@@ -108,24 +108,6 @@ public class PostgresRawdataClientTest {
     }
 
     @Test
-    public void thatSubscriptionAcknowledgesLastSubscriptionId() throws InterruptedException {
-        RawdataProducer producer = client.producer("the-topic");
-        RawdataConsumer consumer = client.consumer("the-topic", "sub1");
-
-        RawdataMessageContent expected1 = producer.buffer(producer.builder().externalId("a").put("payload", new byte[5]));
-        RawdataMessageContent expected2 = producer.buffer(producer.builder().externalId("b").put("payload", new byte[3]));
-        producer.publish(expected1.externalId(), expected2.externalId());
-
-        RawdataMessage message1 = consumer.receive(1, TimeUnit.SECONDS);
-        RawdataMessage message2 = consumer.receive(1, TimeUnit.SECONDS);
-        assertEquals(message1.content(), expected1);
-        assertEquals(message2.content(), expected2);
-
-        consumer.acknowledgeAccumulative(message2.id());
-        assertEquals(consumer.lastAcknowledgedMessageId(), message2.id());
-    }
-
-    @Test
     public void thatMultipleMessagesCanBeProducedAndConsumerSynchronously() throws InterruptedException {
         RawdataProducer producer = client.producer("the-topic");
         RawdataConsumer consumer = client.consumer("the-topic", "sub1");
@@ -195,5 +177,29 @@ public class PostgresRawdataClientTest {
         assertEquals(messages2.get(0).content(), expected1);
         assertEquals(messages2.get(1).content(), expected2);
         assertEquals(messages2.get(2).content(), expected3);
+    }
+
+    @Test
+    public void thatConsumerResumingFromMiddleOfTopicWorks() throws Exception {
+        try (RawdataProducer producer = client.producer("the-topic")) {
+            producer.buffer(producer.builder().externalId("a").put("payload", new byte[5]));
+            producer.buffer(producer.builder().externalId("b").put("payload", new byte[3]));
+            producer.buffer(producer.builder().externalId("c").put("payload", new byte[7]));
+            producer.buffer(producer.builder().externalId("d").put("payload", new byte[7]));
+            producer.publish("a", "b", "c", "d");
+        }
+        try (RawdataConsumer consumer = client.consumer("the-topic", "sub1")) {
+            RawdataMessage messageA = consumer.receive(1, TimeUnit.SECONDS);
+            assertEquals(messageA.content().externalId(), "a");
+            RawdataMessage messageB = consumer.receive(1, TimeUnit.SECONDS);
+            assertEquals(messageB.content().externalId(), "b");
+            consumer.acknowledgeAccumulative(messageB.id());
+        }
+        try (RawdataConsumer consumer = client.consumer("the-topic", "sub1")) {
+            RawdataMessage messageC = consumer.receive(1, TimeUnit.SECONDS);
+            assertEquals(messageC.content().externalId(), "c");
+            RawdataMessage messageD = consumer.receive(1, TimeUnit.SECONDS);
+            assertEquals(messageD.content().externalId(), "d");
+        }
     }
 }

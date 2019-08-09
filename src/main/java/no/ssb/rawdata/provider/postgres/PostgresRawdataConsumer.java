@@ -170,26 +170,6 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
     }
 
     @Override
-    public RawdataMessageId lastAcknowledgedMessageId() throws RawdataClosedException {
-        try (Transaction tx = transactionFactory.createTransaction(true)) {
-            try {
-                PreparedStatement ps = tx.connection().prepareStatement("SELECT p.id, p.opaque_id FROM positions p INNER JOIN subscription s ON p.id = s.position WHERE s.topic = ? AND s.subscription = ?");
-                ps.setString(1, topic);
-                ps.setString(2, subscription);
-                ResultSet rs = ps.executeQuery();
-                if (rs.next()) {
-                    Long id = rs.getLong(1);
-                    String opaqueId = rs.getString(2);
-                    return new PostgresRawdataMessageId(topic, id, opaqueId);
-                }
-                return null;
-            } catch (SQLException e) {
-                throw new PersistenceException(e);
-            }
-        }
-    }
-
-    @Override
     public void acknowledgeAccumulative(RawdataMessageId id) throws RawdataClosedException {
         if (isClosed()) {
             throw new RawdataClosedException();
