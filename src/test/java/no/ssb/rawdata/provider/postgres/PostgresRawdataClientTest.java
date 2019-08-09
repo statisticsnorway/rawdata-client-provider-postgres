@@ -26,11 +26,14 @@ public class PostgresRawdataClientTest {
 
     static DynamicConfiguration configuration() {
         return new StoreBasedDynamicConfiguration.Builder()
-                .propertiesResource("application-defaults.properties")
-                .propertiesResource("application-test.properties")
                 .values("rawdata.client.provider", "postgres")
-                .values("postgres.dropOrCreateDb", "true")
-                .values("postgres.driver.disabled", "true")
+                .values("postgres.driver.host", "localhost")
+                .values("postgres.driver.port", "5432")
+                .values("postgres.driver.user", "rdc")
+                .values("postgres.driver.password", "rdc")
+                .values("postgres.driver.database", "rdc")
+                .values("postgres.recreate-database", "true")
+                .values("h2.enabled", "true")
                 .values("h2.driver.url", "jdbc:h2:mem:rdc;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE")
                 .build();
     }

@@ -36,22 +36,23 @@ public class PostgresRawdataClientInitializer implements RawdataClientInitialize
                 "postgres.driver.port",
                 "postgres.driver.user",
                 "postgres.driver.password",
-                "postgres.driver.database"
+                "postgres.driver.database",
+                "postgres.recreate-database"
         );
     }
 
     @Override
     public RawdataClient initialize(Map<String, String> configMap) {
-        boolean disablePostgresDatabase = Boolean.parseBoolean(configMap.get("postgres.driver.disabled"));
+        boolean enableH2DatabaseDriver = Boolean.parseBoolean(configMap.get("h2.enabled"));
 
-        if (!disablePostgresDatabase) {
+        if (!enableH2DatabaseDriver) {
             HikariDataSource dataSource = openPostgresDataSource(
                     configMap.get("postgres.driver.host"),
                     configMap.get("postgres.driver.port"),
                     configMap.get("postgres.driver.user"),
                     configMap.get("postgres.driver.password"),
                     configMap.get("postgres.driver.database"),
-                    Boolean.parseBoolean(configMap.get("postgres.dropOrCreateDb")));
+                    Boolean.parseBoolean(configMap.get("postgres.recreate-database")));
 
             return new PostgresRawdataClient(new PostgresTransactionFactory(dataSource));
 
@@ -60,7 +61,7 @@ public class PostgresRawdataClientInitializer implements RawdataClientInitialize
                     configMap.get("h2.driver.url"),
                     "sa",
                     "sa",
-                    Boolean.parseBoolean(configMap.get("postgres.dropOrCreateDb"))
+                    Boolean.parseBoolean(configMap.get("postgres.recreate-database"))
             );
 
             try {
@@ -76,7 +77,7 @@ public class PostgresRawdataClientInitializer implements RawdataClientInitialize
 
     // https://github.com/brettwooldridge/HikariCP
     static HikariDataSource openPostgresDataSource(String postgresDbDriverHost, String postgresDbDriverPort, String postgresDbDriverUser, String postgresDbDriverPassword, String postgresDbDriverDatabase, boolean dropOrCreateDb) {
-        LOG.info("Configured Database: postgres");
+        LOG.info("Configured database: postgres");
         Properties props = new Properties();
         props.setProperty("dataSourceClassName", "org.postgresql.ds.PGSimpleDataSource");
         props.setProperty("dataSource.serverName", postgresDbDriverHost);
@@ -99,7 +100,7 @@ public class PostgresRawdataClientInitializer implements RawdataClientInitialize
     }
 
     static HikariDataSource openH2DataSource(String jdbcUrl, String username, String password, boolean dropOrCreateDb) {
-        LOG.info("Configured Database: h2");
+        LOG.info("Configured database: h2");
         Properties props = new Properties();
         props.setProperty("jdbcUrl", jdbcUrl);
         props.setProperty("username", username);
@@ -122,7 +123,6 @@ public class PostgresRawdataClientInitializer implements RawdataClientInitialize
     static void dropOrCreateDatabase(HikariDataSource datasource) {
         try {
             String initSQL = FileAndClasspathReaderUtils.readFileOrClasspathResource("postgres/init-db.sql");
-//            System.out.printf("initSQL: %s%n", initSQL);
             Connection conn = datasource.getConnection();
             conn.beginRequest();
 
