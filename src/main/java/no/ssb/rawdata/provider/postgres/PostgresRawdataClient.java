@@ -25,7 +25,6 @@ public class PostgresRawdataClient implements RawdataClient {
         PostgresRawdataProducer producer = new PostgresRawdataProducer(transactionFactory, topicName);
         this.producers.add(producer);
         return producer;
-
     }
 
     @Override
@@ -41,7 +40,7 @@ public class PostgresRawdataClient implements RawdataClient {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         for (PostgresRawdataProducer producer : producers) {
             producer.close();
         }

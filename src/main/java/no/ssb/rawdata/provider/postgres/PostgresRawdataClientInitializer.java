@@ -147,6 +147,7 @@ public class PostgresRawdataClientInitializer implements RawdataClientInitialize
                     }
                 }
             }
+
             conn.endRequest();
 
         } catch (SQLException e) {

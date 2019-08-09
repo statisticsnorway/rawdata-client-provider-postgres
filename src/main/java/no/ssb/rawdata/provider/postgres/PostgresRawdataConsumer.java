@@ -80,7 +80,7 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
     String getOpaqueIdOfId(long id) {
         try (Transaction tx = transactionFactory.createTransaction(true)) {
             try {
-                PreparedStatement ps = tx.connection().prepareStatement("SELECT opaqueId FROM positions WHERE id = ?");
+                PreparedStatement ps = tx.connection().prepareStatement("SELECT opaque_id FROM positions WHERE id = ?");
                 ps.setLong(1, id);
                 ResultSet rs = ps.executeQuery();
                 if (rs.next()) {
