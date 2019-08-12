@@ -53,14 +53,14 @@ public class PostgresRawdataClientTest {
     }
 
     @Test
-    public void thatLastExternalIdOfEmptyTopicCanBeReadByProducer() {
+    public void thatLastPositionOfEmptyTopicCanBeReadByProducer() {
         RawdataProducer producer = client.producer("the-topic");
 
         assertEquals(producer.lastPosition(), null);
     }
 
     @Test
-    public void thatLastExternalIdOfProducerCanBeRead() {
+    public void thatLastPositionOfProducerCanBeRead() {
         RawdataProducer producer = client.producer("the-topic");
 
         producer.buffer(producer.builder().position("a").put("payload", new byte[5]));

@@ -39,15 +39,15 @@ public class PostgresRawdataClient implements RawdataClient {
         return consumer;
     }
 
-    PostgresRawdataMessageId findMessageId(String topic, String externalId) {
+    PostgresRawdataMessageId findMessageId(String topic, String position) {
         try (Transaction tx = transactionFactory.createTransaction(true)) {
             PreparedStatement ps = tx.connection().prepareStatement("SELECT id FROM positions WHERE topic = ? AND opaque_id = ?");
             ps.setString(1, topic);
-            ps.setString(2, externalId);
+            ps.setString(2, position);
             ResultSet rs = ps.executeQuery();
             if (rs.next()) {
                 long id = rs.getLong(1);
-                return new PostgresRawdataMessageId(topic, id, externalId);
+                return new PostgresRawdataMessageId(topic, id, position);
             }
             return null;
         } catch (SQLException e) {

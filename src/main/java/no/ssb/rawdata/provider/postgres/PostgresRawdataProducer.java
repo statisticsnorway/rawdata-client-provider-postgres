@@ -61,12 +61,12 @@ class PostgresRawdataProducer implements RawdataProducer {
             throw new RawdataClosedException();
         }
         return new RawdataMessage.Builder() {
-            String externalId;
+            String position;
             Map<String, byte[]> data = new LinkedHashMap<>();
 
             @Override
-            public RawdataMessage.Builder position(String id) {
-                this.externalId = id;
+            public RawdataMessage.Builder position(String position) {
+                this.position = position;
                 return this;
             }
 
@@ -78,7 +78,7 @@ class PostgresRawdataProducer implements RawdataProducer {
 
             @Override
             public PostgresRawdataMessageContent build() {
-                return new PostgresRawdataMessageContent(externalId, data);
+                return new PostgresRawdataMessageContent(position, data);
             }
         };
     }
