@@ -1,6 +1,5 @@
 DROP TABLE IF EXISTS content;
 DROP TABLE IF EXISTS positions;
-DROP TABLE IF EXISTS subscription;
 
 CREATE TABLE positions
 (
@@ -15,17 +14,11 @@ CREATE TABLE positions
 CREATE TABLE content
 (
     id             serial  NOT NULL,
-    position_fk_id int     NOT NULL, /* TODO CREATE INDEX ON THIS FIELD */
+    position_fk_id int     NOT NULL,
     name           varchar NOT NULL,
     data           bytea   NOT NULL,
     PRIMARY KEY (id),
     FOREIGN KEY (position_fk_id) REFERENCES positions (id)
 );
 
-CREATE TABLE subscription
-(
-    topic        varchar NOT NULL,
-    subscription varchar NOT NULL,
-    position     int     NOT NULL,
-    PRIMARY KEY (topic, subscription)
-);
+CREATE INDEX ON content (position_fk_id, name);

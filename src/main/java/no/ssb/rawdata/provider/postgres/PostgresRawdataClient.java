@@ -2,9 +2,14 @@ package no.ssb.rawdata.provider.postgres;
 
 import no.ssb.rawdata.api.RawdataClient;
 import no.ssb.rawdata.api.RawdataConsumer;
+import no.ssb.rawdata.api.RawdataMessageId;
 import no.ssb.rawdata.api.RawdataProducer;
+import no.ssb.rawdata.provider.postgres.tx.Transaction;
 import no.ssb.rawdata.provider.postgres.tx.TransactionFactory;
 
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -28,10 +33,27 @@ public class PostgresRawdataClient implements RawdataClient {
     }
 
     @Override
-    public RawdataConsumer consumer(String topicName, String subscription) {
-        PostgresRawdataConsumer consumer = new PostgresRawdataConsumer(transactionFactory, topicName, subscription);
+    public RawdataConsumer consumer(String topicName, RawdataMessageId initialPosition) {
+        PostgresRawdataConsumer consumer = new PostgresRawdataConsumer(transactionFactory, topicName, initialPosition);
         consumers.add(consumer);
         return consumer;
+    }
+
+    @Override
+    public RawdataMessageId findMessageId(String topic, String externalId) {
+        try (Transaction tx = transactionFactory.createTransaction(true)) {
+            PreparedStatement ps = tx.connection().prepareStatement("SELECT id FROM positions WHERE topic = ? AND opaque_id = ?");
+            ps.setString(1, topic);
+            ps.setString(2, externalId);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                long id = rs.getLong(1);
+                return new PostgresRawdataMessageId(topic, id, externalId);
+            }
+            return null;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override

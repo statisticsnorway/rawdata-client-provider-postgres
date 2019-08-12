@@ -24,83 +24,23 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
 
     final TransactionFactory transactionFactory;
     final String topic;
-    final String subscription;
     final AtomicReference<PostgresRawdataMessageId> position = new AtomicReference<>();
     final AtomicBoolean closed = new AtomicBoolean(false);
     final Lock pollLock = new ReentrantLock();
     final Condition condition = pollLock.newCondition();
 
-    public PostgresRawdataConsumer(TransactionFactory transactionFactory, String topic, String subscription) {
+    public PostgresRawdataConsumer(TransactionFactory transactionFactory, String topic, RawdataMessageId initialPosition) {
         this.transactionFactory = transactionFactory;
         this.topic = topic;
-        this.subscription = subscription;
-        Long lastAckedPositionOfSubscription = getLastAckedPositionOfSubscription();
-        if (lastAckedPositionOfSubscription == null) {
-            // create a new subscription
-            createNewPersistentSubscription(-1);
-            position.set(new PostgresRawdataMessageId(topic, -1, null));
-        } else {
-            // initialize from most recent ack checkpoint
-            String lastAckedOpaqueId = getOpaqueIdOfId(lastAckedPositionOfSubscription);
-            position.set(new PostgresRawdataMessageId(topic, lastAckedPositionOfSubscription, lastAckedOpaqueId));
+        if (initialPosition == null) {
+            initialPosition = new PostgresRawdataMessageId(topic, -1, null);
         }
-    }
-
-    Long getLastAckedPositionOfSubscription() {
-        try (Transaction tx = transactionFactory.createTransaction(true)) {
-            try {
-                PreparedStatement ps = tx.connection().prepareStatement("SELECT position FROM subscription WHERE topic = ? AND subscription = ?");
-                ps.setString(1, topic);
-                ps.setString(2, subscription);
-                ResultSet rs = ps.executeQuery();
-                if (rs.next()) {
-                    return rs.getLong(1);
-                }
-                return null; // no subscription
-            } catch (SQLException e) {
-                throw new PersistenceException(e);
-            }
-        }
-    }
-
-    void createNewPersistentSubscription(long initialPosition) {
-        try (Transaction tx = transactionFactory.createTransaction(false)) {
-            try {
-                PreparedStatement ps = tx.connection().prepareStatement("INSERT INTO subscription (topic, subscription, position) VALUES (?, ?, ?)");
-                ps.setString(1, topic);
-                ps.setString(2, subscription);
-                ps.setLong(3, initialPosition);
-                ps.executeUpdate();
-            } catch (SQLException e) {
-                throw new PersistenceException(e);
-            }
-        }
-    }
-
-    String getOpaqueIdOfId(long id) {
-        try (Transaction tx = transactionFactory.createTransaction(true)) {
-            try {
-                PreparedStatement ps = tx.connection().prepareStatement("SELECT opaque_id FROM positions WHERE id = ?");
-                ps.setLong(1, id);
-                ResultSet rs = ps.executeQuery();
-                if (rs.next()) {
-                    return rs.getString(1);
-                }
-                return null; // no such id exist
-            } catch (SQLException e) {
-                throw new PersistenceException(e);
-            }
-        }
+        position.set((PostgresRawdataMessageId) initialPosition);
     }
 
     @Override
     public String topic() {
         return topic;
-    }
-
-    @Override
-    public String subscription() {
-        return subscription;
     }
 
     PostgresRawdataMessage findMessageContentOfIdAfterPosition(PostgresRawdataMessageId currentId) {
@@ -170,24 +110,6 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
     }
 
     @Override
-    public void acknowledgeAccumulative(RawdataMessageId id) throws RawdataClosedException {
-        if (isClosed()) {
-            throw new RawdataClosedException();
-        }
-        try (Transaction tx = transactionFactory.createTransaction(false)) {
-            try {
-                PreparedStatement ps = tx.connection().prepareStatement("UPDATE subscription SET position = ? WHERE topic = ? AND subscription = ?");
-                ps.setLong(1, ((PostgresRawdataMessageId) id).id);
-                ps.setString(2, topic);
-                ps.setString(3, subscription);
-                ps.executeUpdate();
-            } catch (SQLException e) {
-                throw new PersistenceException(e);
-            }
-        }
-    }
-
-    @Override
     public boolean isClosed() {
         return closed.get();
     }
@@ -201,8 +123,7 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
     public String toString() {
         return "PostgresRawdataConsumer{" +
                 "topic='" + topic + '\'' +
-                ", subscription='" + subscription + '\'' +
-                ", position=" + position.get() +
+                "position=" + position.get() +
                 ", closed=" + closed +
                 '}';
     }
