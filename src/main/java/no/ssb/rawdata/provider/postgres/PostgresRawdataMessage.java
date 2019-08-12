@@ -1,10 +1,8 @@
 package no.ssb.rawdata.provider.postgres;
 
-import no.ssb.rawdata.api.RawdataMessage;
-
 import java.util.Objects;
 
-public class PostgresRawdataMessage implements RawdataMessage {
+public class PostgresRawdataMessage {
 
     private final PostgresRawdataMessageId id;
     private final PostgresRawdataMessageContent content;
@@ -20,12 +18,10 @@ public class PostgresRawdataMessage implements RawdataMessage {
         this.content = content;
     }
 
-    @Override
     public PostgresRawdataMessageId id() {
         return id;
     }
 
-    @Override
     public PostgresRawdataMessageContent content() {
         return content;
     }

@@ -1,13 +1,13 @@
 package no.ssb.rawdata.provider.postgres;
 
-import no.ssb.rawdata.api.RawdataMessageContent;
+import no.ssb.rawdata.api.RawdataMessage;
 
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-public class PostgresRawdataMessageContent implements RawdataMessageContent {
+public class PostgresRawdataMessageContent implements RawdataMessage {
 
     private final String externalId;
     private final Map<String, byte[]> data;
@@ -24,7 +24,7 @@ public class PostgresRawdataMessageContent implements RawdataMessageContent {
     }
 
     @Override
-    public String externalId() {
+    public String position() {
         return externalId;
     }
 

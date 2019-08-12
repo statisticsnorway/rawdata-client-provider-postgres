@@ -2,7 +2,6 @@ package no.ssb.rawdata.provider.postgres;
 
 import no.ssb.rawdata.api.RawdataClient;
 import no.ssb.rawdata.api.RawdataConsumer;
-import no.ssb.rawdata.api.RawdataMessageId;
 import no.ssb.rawdata.api.RawdataProducer;
 import no.ssb.rawdata.provider.postgres.tx.Transaction;
 import no.ssb.rawdata.provider.postgres.tx.TransactionFactory;
@@ -33,14 +32,14 @@ public class PostgresRawdataClient implements RawdataClient {
     }
 
     @Override
-    public RawdataConsumer consumer(String topicName, RawdataMessageId initialPosition) {
-        PostgresRawdataConsumer consumer = new PostgresRawdataConsumer(transactionFactory, topicName, initialPosition);
+    public RawdataConsumer consumer(String topicName, String initialPosition) {
+        PostgresRawdataMessageId initialMessageId = findMessageId(topicName, initialPosition);
+        PostgresRawdataConsumer consumer = new PostgresRawdataConsumer(transactionFactory, topicName, initialMessageId);
         consumers.add(consumer);
         return consumer;
     }
 
-    @Override
-    public RawdataMessageId findMessageId(String topic, String externalId) {
+    PostgresRawdataMessageId findMessageId(String topic, String externalId) {
         try (Transaction tx = transactionFactory.createTransaction(true)) {
             PreparedStatement ps = tx.connection().prepareStatement("SELECT id FROM positions WHERE topic = ? AND opaque_id = ?");
             ps.setString(1, topic);

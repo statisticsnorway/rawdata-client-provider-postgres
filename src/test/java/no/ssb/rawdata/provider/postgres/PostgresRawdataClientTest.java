@@ -7,8 +7,6 @@ import no.ssb.rawdata.api.RawdataClientInitializer;
 import no.ssb.rawdata.api.RawdataConsumer;
 import no.ssb.rawdata.api.RawdataContentNotBufferedException;
 import no.ssb.rawdata.api.RawdataMessage;
-import no.ssb.rawdata.api.RawdataMessageContent;
-import no.ssb.rawdata.api.RawdataMessageId;
 import no.ssb.rawdata.api.RawdataProducer;
 import no.ssb.service.provider.api.ProviderConfigurator;
 import org.testng.annotations.AfterMethod;
@@ -58,23 +56,23 @@ public class PostgresRawdataClientTest {
     public void thatLastExternalIdOfEmptyTopicCanBeReadByProducer() {
         RawdataProducer producer = client.producer("the-topic");
 
-        assertEquals(producer.lastExternalId(), null);
+        assertEquals(producer.lastPosition(), null);
     }
 
     @Test
     public void thatLastExternalIdOfProducerCanBeRead() {
         RawdataProducer producer = client.producer("the-topic");
 
-        producer.buffer(producer.builder().externalId("a").put("payload", new byte[5]));
-        producer.buffer(producer.builder().externalId("b").put("payload", new byte[3]));
+        producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
+        producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
         producer.publish("a", "b");
 
-        assertEquals(producer.lastExternalId(), "b");
+        assertEquals(producer.lastPosition(), "b");
 
-        producer.buffer(producer.builder().externalId("c").put("payload", new byte[7]));
+        producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
         producer.publish("c");
 
-        assertEquals(producer.lastExternalId(), "c");
+        assertEquals(producer.lastPosition(), "c");
     }
 
     @Test(expectedExceptions = RawdataContentNotBufferedException.class)
@@ -88,11 +86,11 @@ public class PostgresRawdataClientTest {
         RawdataProducer producer = client.producer("the-topic");
         RawdataConsumer consumer = client.consumer("the-topic");
 
-        RawdataMessageContent expected1 = producer.buffer(producer.builder().externalId("a").put("payload", new byte[5]));
-        producer.publish(expected1.externalId());
+        RawdataMessage expected1 = producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
+        producer.publish(expected1.position());
 
         RawdataMessage message = consumer.receive(1, TimeUnit.SECONDS);
-        assertEquals(message.content(), expected1);
+        assertEquals(message, expected1);
     }
 
     @Test
@@ -102,11 +100,11 @@ public class PostgresRawdataClientTest {
 
         CompletableFuture<? extends RawdataMessage> future = consumer.receiveAsync();
 
-        RawdataMessageContent expected1 = producer.buffer(producer.builder().externalId("a").put("payload", new byte[5]));
-        producer.publish(expected1.externalId());
+        RawdataMessage expected1 = producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
+        producer.publish(expected1.position());
 
         RawdataMessage message = future.join();
-        assertEquals(message.content(), expected1);
+        assertEquals(message, expected1);
     }
 
     @Test
@@ -114,17 +112,17 @@ public class PostgresRawdataClientTest {
         RawdataProducer producer = client.producer("the-topic");
         RawdataConsumer consumer = client.consumer("the-topic");
 
-        RawdataMessageContent expected1 = producer.buffer(producer.builder().externalId("a").put("payload", new byte[5]));
-        RawdataMessageContent expected2 = producer.buffer(producer.builder().externalId("b").put("payload", new byte[3]));
-        RawdataMessageContent expected3 = producer.buffer(producer.builder().externalId("c").put("payload", new byte[7]));
-        producer.publish(expected1.externalId(), expected2.externalId(), expected3.externalId());
+        RawdataMessage expected1 = producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
+        RawdataMessage expected2 = producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
+        RawdataMessage expected3 = producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
+        producer.publish(expected1.position(), expected2.position(), expected3.position());
 
         RawdataMessage message1 = consumer.receive(1, TimeUnit.SECONDS);
         RawdataMessage message2 = consumer.receive(1, TimeUnit.SECONDS);
         RawdataMessage message3 = consumer.receive(1, TimeUnit.SECONDS);
-        assertEquals(message1.content(), expected1);
-        assertEquals(message2.content(), expected2);
-        assertEquals(message3.content(), expected3);
+        assertEquals(message1, expected1);
+        assertEquals(message2, expected2);
+        assertEquals(message3, expected3);
     }
 
     @Test
@@ -134,22 +132,22 @@ public class PostgresRawdataClientTest {
 
         CompletableFuture<List<RawdataMessage>> future = receiveAsyncAddMessageAndRepeatRecursive(consumer, "c", new ArrayList<>());
 
-        RawdataMessageContent expected1 = producer.buffer(producer.builder().externalId("a").put("payload", new byte[5]));
-        RawdataMessageContent expected2 = producer.buffer(producer.builder().externalId("b").put("payload", new byte[3]));
-        RawdataMessageContent expected3 = producer.buffer(producer.builder().externalId("c").put("payload", new byte[7]));
-        producer.publish(expected1.externalId(), expected2.externalId(), expected3.externalId());
+        RawdataMessage expected1 = producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
+        RawdataMessage expected2 = producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
+        RawdataMessage expected3 = producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
+        producer.publish(expected1.position(), expected2.position(), expected3.position());
 
         List<RawdataMessage> messages = future.join();
 
-        assertEquals(messages.get(0).content(), expected1);
-        assertEquals(messages.get(1).content(), expected2);
-        assertEquals(messages.get(2).content(), expected3);
+        assertEquals(messages.get(0), expected1);
+        assertEquals(messages.get(1), expected2);
+        assertEquals(messages.get(2), expected3);
     }
 
     private CompletableFuture<List<RawdataMessage>> receiveAsyncAddMessageAndRepeatRecursive(RawdataConsumer consumer, String endPosition, List<RawdataMessage> messages) {
         return consumer.receiveAsync().thenCompose(message -> {
             messages.add(message);
-            if (endPosition.equals(message.content().externalId())) {
+            if (endPosition.equals(message.position())) {
                 return CompletableFuture.completedFuture(messages);
             }
             return receiveAsyncAddMessageAndRepeatRecursive(consumer, endPosition, messages);
@@ -165,110 +163,92 @@ public class PostgresRawdataClientTest {
         CompletableFuture<List<RawdataMessage>> future1 = receiveAsyncAddMessageAndRepeatRecursive(consumer1, "c", new ArrayList<>());
         CompletableFuture<List<RawdataMessage>> future2 = receiveAsyncAddMessageAndRepeatRecursive(consumer2, "c", new ArrayList<>());
 
-        RawdataMessageContent expected1 = producer.buffer(producer.builder().externalId("a").put("payload", new byte[5]));
-        RawdataMessageContent expected2 = producer.buffer(producer.builder().externalId("b").put("payload", new byte[3]));
-        RawdataMessageContent expected3 = producer.buffer(producer.builder().externalId("c").put("payload", new byte[7]));
-        producer.publish(expected1.externalId(), expected2.externalId(), expected3.externalId());
+        RawdataMessage expected1 = producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
+        RawdataMessage expected2 = producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
+        RawdataMessage expected3 = producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
+        producer.publish(expected1.position(), expected2.position(), expected3.position());
 
         List<RawdataMessage> messages1 = future1.join();
-        assertEquals(messages1.get(0).content(), expected1);
-        assertEquals(messages1.get(1).content(), expected2);
-        assertEquals(messages1.get(2).content(), expected3);
+        assertEquals(messages1.get(0), expected1);
+        assertEquals(messages1.get(1), expected2);
+        assertEquals(messages1.get(2), expected3);
 
         List<RawdataMessage> messages2 = future2.join();
-        assertEquals(messages2.get(0).content(), expected1);
-        assertEquals(messages2.get(1).content(), expected2);
-        assertEquals(messages2.get(2).content(), expected3);
-    }
-
-    @Test
-    public void thatMessageWithGivenExternalIdCanBeFoundInTopic() throws Exception {
-        List<? extends RawdataMessageId> ids;
-        try (RawdataProducer producer = client.producer("the-topic")) {
-            producer.buffer(producer.builder().externalId("a").put("payload", new byte[5]));
-            producer.buffer(producer.builder().externalId("b").put("payload", new byte[3]));
-            producer.buffer(producer.builder().externalId("c").put("payload", new byte[7]));
-            ids = producer.publish("a", "b", "c");
-        }
-        assertEquals(client.findMessageId("the-topic", "a"), ids.get(0));
-        assertEquals(client.findMessageId("the-topic", "b"), ids.get(1));
-        assertEquals(client.findMessageId("the-topic", "c"), ids.get(2));
+        assertEquals(messages2.get(0), expected1);
+        assertEquals(messages2.get(1), expected2);
+        assertEquals(messages2.get(2), expected3);
     }
 
     @Test
     public void thatConsumerCanReadFromBeginning() throws Exception {
         try (RawdataProducer producer = client.producer("the-topic")) {
-            producer.buffer(producer.builder().externalId("a").put("payload", new byte[5]));
-            producer.buffer(producer.builder().externalId("b").put("payload", new byte[3]));
-            producer.buffer(producer.builder().externalId("c").put("payload", new byte[7]));
-            producer.buffer(producer.builder().externalId("d").put("payload", new byte[7]));
+            producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
+            producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
+            producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
+            producer.buffer(producer.builder().position("d").put("payload", new byte[7]));
             producer.publish("a", "b", "c", "d");
         }
         try (RawdataConsumer consumer = client.consumer("the-topic")) {
             RawdataMessage message = consumer.receive(1, TimeUnit.SECONDS);
-            assertEquals(message.content().externalId(), "a");
+            assertEquals(message.position(), "a");
         }
     }
 
     @Test
     public void thatConsumerCanReadFromFirstMessage() throws Exception {
-        List<? extends RawdataMessageId> ids;
         try (RawdataProducer producer = client.producer("the-topic")) {
-            producer.buffer(producer.builder().externalId("a").put("payload", new byte[5]));
-            producer.buffer(producer.builder().externalId("b").put("payload", new byte[3]));
-            producer.buffer(producer.builder().externalId("c").put("payload", new byte[7]));
-            producer.buffer(producer.builder().externalId("d").put("payload", new byte[7]));
-            ids = producer.publish("a", "b", "c", "d");
+            producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
+            producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
+            producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
+            producer.buffer(producer.builder().position("d").put("payload", new byte[7]));
+            producer.publish("a", "b", "c", "d");
         }
-        try (RawdataConsumer consumer = client.consumer("the-topic", ids.get(0))) {
+        try (RawdataConsumer consumer = client.consumer("the-topic", "a")) {
             RawdataMessage message = consumer.receive(1, TimeUnit.SECONDS);
-            assertEquals(message.content().externalId(), "b");
+            assertEquals(message.position(), "b");
         }
     }
 
     @Test
     public void thatConsumerCanReadFromMiddle() throws Exception {
-        List<? extends RawdataMessageId> ids;
         try (RawdataProducer producer = client.producer("the-topic")) {
-            producer.buffer(producer.builder().externalId("a").put("payload", new byte[5]));
-            producer.buffer(producer.builder().externalId("b").put("payload", new byte[3]));
-            producer.buffer(producer.builder().externalId("c").put("payload", new byte[7]));
-            producer.buffer(producer.builder().externalId("d").put("payload", new byte[7]));
-            ids = producer.publish("a", "b", "c", "d");
+            producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
+            producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
+            producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
+            producer.buffer(producer.builder().position("d").put("payload", new byte[7]));
+            producer.publish("a", "b", "c", "d");
         }
-        try (RawdataConsumer consumer = client.consumer("the-topic", ids.get(1))) {
+        try (RawdataConsumer consumer = client.consumer("the-topic", "b")) {
             RawdataMessage message = consumer.receive(1, TimeUnit.SECONDS);
-            assertEquals(message.content().externalId(), "c");
+            assertEquals(message.position(), "c");
         }
     }
 
     @Test
     public void thatConsumerCanReadFromRightBeforeLast() throws Exception {
-        List<? extends RawdataMessageId> ids;
         try (RawdataProducer producer = client.producer("the-topic")) {
-            producer.buffer(producer.builder().externalId("a").put("payload", new byte[5]));
-            producer.buffer(producer.builder().externalId("b").put("payload", new byte[3]));
-            producer.buffer(producer.builder().externalId("c").put("payload", new byte[7]));
-            producer.buffer(producer.builder().externalId("d").put("payload", new byte[7]));
-            ids = producer.publish("a", "b", "c", "d");
+            producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
+            producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
+            producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
+            producer.buffer(producer.builder().position("d").put("payload", new byte[7]));
+            producer.publish("a", "b", "c", "d");
         }
-        try (RawdataConsumer consumer = client.consumer("the-topic", ids.get(2))) {
+        try (RawdataConsumer consumer = client.consumer("the-topic", "c")) {
             RawdataMessage message = consumer.receive(1, TimeUnit.SECONDS);
-            assertEquals(message.content().externalId(), "d");
+            assertEquals(message.position(), "d");
         }
     }
 
     @Test
     public void thatConsumerCanReadFromLast() throws Exception {
-        List<? extends RawdataMessageId> ids;
         try (RawdataProducer producer = client.producer("the-topic")) {
-            producer.buffer(producer.builder().externalId("a").put("payload", new byte[5]));
-            producer.buffer(producer.builder().externalId("b").put("payload", new byte[3]));
-            producer.buffer(producer.builder().externalId("c").put("payload", new byte[7]));
-            producer.buffer(producer.builder().externalId("d").put("payload", new byte[7]));
-            ids = producer.publish("a", "b", "c", "d");
+            producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
+            producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
+            producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
+            producer.buffer(producer.builder().position("d").put("payload", new byte[7]));
+            producer.publish("a", "b", "c", "d");
         }
-        try (RawdataConsumer consumer = client.consumer("the-topic", ids.get(3))) {
+        try (RawdataConsumer consumer = client.consumer("the-topic", "d")) {
             RawdataMessage message = consumer.receive(100, TimeUnit.MILLISECONDS);
             assertNull(message);
         }

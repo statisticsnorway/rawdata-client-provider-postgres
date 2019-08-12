@@ -1,10 +1,8 @@
 package no.ssb.rawdata.provider.postgres;
 
-import no.ssb.rawdata.api.RawdataMessageId;
-
 import java.util.Objects;
 
-class PostgresRawdataMessageId implements RawdataMessageId {
+class PostgresRawdataMessageId {
     final String topic;
     final long id;
     final String opaqueId;

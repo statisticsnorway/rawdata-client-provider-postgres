@@ -3,7 +3,6 @@ package no.ssb.rawdata.provider.postgres;
 import no.ssb.rawdata.api.RawdataClosedException;
 import no.ssb.rawdata.api.RawdataConsumer;
 import no.ssb.rawdata.api.RawdataMessage;
-import no.ssb.rawdata.api.RawdataMessageId;
 import no.ssb.rawdata.provider.postgres.tx.Transaction;
 import no.ssb.rawdata.provider.postgres.tx.TransactionFactory;
 
@@ -29,13 +28,13 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
     final Lock pollLock = new ReentrantLock();
     final Condition condition = pollLock.newCondition();
 
-    public PostgresRawdataConsumer(TransactionFactory transactionFactory, String topic, RawdataMessageId initialPosition) {
+    public PostgresRawdataConsumer(TransactionFactory transactionFactory, String topic, PostgresRawdataMessageId initialPosition) {
         this.transactionFactory = transactionFactory;
         this.topic = topic;
         if (initialPosition == null) {
             initialPosition = new PostgresRawdataMessageId(topic, -1, null);
         }
-        position.set((PostgresRawdataMessageId) initialPosition);
+        position.set(initialPosition);
     }
 
     @Override
@@ -71,7 +70,7 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
     }
 
     @Override
-    public RawdataMessage receive(int timeout, TimeUnit unit) throws InterruptedException {
+    public PostgresRawdataMessageContent receive(int timeout, TimeUnit unit) throws InterruptedException {
         int pollIntervalNanos = 250 * 1000 * 1000;
         if (isClosed()) {
             throw new RawdataClosedException();
@@ -91,7 +90,7 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
                 message = findMessageContentOfIdAfterPosition(position.get());
             }
             position.set(message.id());
-            return message;
+            return message.content();
         } finally {
             pollLock.unlock();
         }
