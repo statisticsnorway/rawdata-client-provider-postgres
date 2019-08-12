@@ -36,6 +36,13 @@
             <organization>Capra Consulting AS</organization>
             <organizationUrl>https://www.capraconsulting.no/</organizationUrl>
         </developer>
+        <developer>
+            <name>Kim Christian Gaarder</name>
+            <email>kim.christian.gaarder@gmail.com</email>
+            <url>https://www.linkedin.com/in/kimchristiangaarder/</url>
+            <organization>Capra Consulting AS</organization>
+            <organizationUrl>https://www.capraconsulting.no/</organizationUrl>
+        </developer>
     </developers>
 
     <scm>
