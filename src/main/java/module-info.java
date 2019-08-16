@@ -15,6 +15,4 @@ module no.ssb.rawdata.provider.postgres {
 
     opens postgres;
 
-    exports no.ssb.rawdata.provider.postgres;
-
 }
