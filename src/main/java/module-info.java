@@ -1,7 +1,7 @@
 import no.ssb.rawdata.api.RawdataClientInitializer;
 import no.ssb.rawdata.provider.postgres.PostgresRawdataClientInitializer;
 
-module no.ssb.rawdata.provider.postgres {
+module no.ssb.rawdata.postgres {
     requires java.logging;
     requires org.slf4j;
     requires java.sql;
