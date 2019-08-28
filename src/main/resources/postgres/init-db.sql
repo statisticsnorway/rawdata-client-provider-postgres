@@ -1,24 +1,20 @@
-DROP TABLE IF EXISTS content;
-DROP TABLE IF EXISTS positions;
+DROP TABLE IF EXISTS "TOPIC_content";
+DROP TABLE IF EXISTS "TOPIC_positions";
 
-CREATE TABLE positions
+CREATE TABLE "TOPIC_positions"
 (
     id        serial                   NOT NULL,
-    topic     varchar                  NOT NULL,
     opaque_id varchar                  NOT NULL,
     ts        timestamp with time zone NOT NULL,
     PRIMARY KEY (id),
-    UNIQUE (topic, opaque_id)
+    UNIQUE (opaque_id)
 );
 
-CREATE TABLE content
+CREATE TABLE "TOPIC_content"
 (
-    id             serial  NOT NULL,
     position_fk_id int     NOT NULL,
     name           varchar NOT NULL,
     data           bytea   NOT NULL,
-    PRIMARY KEY (id),
-    FOREIGN KEY (position_fk_id) REFERENCES positions (id)
+    PRIMARY KEY (position_fk_id, name),
+    FOREIGN KEY (position_fk_id) REFERENCES "TOPIC_positions" (id)
 );
-
-CREATE INDEX ON content (position_fk_id, name);

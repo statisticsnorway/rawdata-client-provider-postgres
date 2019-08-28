@@ -32,7 +32,6 @@ public class PostgresRawdataClientTest {
                 .values("postgres.driver.user", "rdc")
                 .values("postgres.driver.password", "rdc")
                 .values("postgres.driver.database", "rdc")
-                .values("postgres.recreate-database", "true")
                 .values("h2.enabled", "true")
                 .values("h2.driver.url", "jdbc:h2:mem:rdc;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE")
                 .build();
@@ -45,6 +44,11 @@ public class PostgresRawdataClientTest {
         DynamicConfiguration configuration = configuration();
         client = ProviderConfigurator.configure(configuration.asMap(), configuration.evaluateToString("rawdata.client.provider"), RawdataClientInitializer.class);
         assertTrue(client instanceof PostgresRawdataClient);
+        dropTables("the-topic");
+    }
+
+    private void dropTables(String topic) {
+        ((PostgresRawdataClient) client).dropOrCreateDatabase(topic);
     }
 
     @AfterMethod

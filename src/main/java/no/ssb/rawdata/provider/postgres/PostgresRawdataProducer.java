@@ -42,8 +42,7 @@ class PostgresRawdataProducer implements RawdataProducer {
         }
         try (Transaction tx = transactionFactory.createTransaction(true)) {
             try {
-                PreparedStatement ps = tx.connection().prepareStatement("SELECT opaque_id FROM positions WHERE topic = ? ORDER BY id DESC LIMIT 1");
-                ps.setString(1, topic);
+                PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT opaque_id FROM \"%s_positions\" ORDER BY id DESC LIMIT 1", topic));
                 ResultSet rs = ps.executeQuery();
                 if (rs.next()) {
                     return rs.getString(1);
@@ -107,11 +106,10 @@ class PostgresRawdataProducer implements RawdataProducer {
         Map<String, Long> idByOpaqueId = new LinkedHashMap<>();
         try (Transaction tx = transactionFactory.createTransaction(false)) {
 
-            PreparedStatement positionUpdate = tx.connection().prepareStatement("INSERT INTO positions (topic, opaque_id, ts) VALUES (?, ?, ?)", new String[]{"id"});
+            PreparedStatement positionUpdate = tx.connection().prepareStatement(String.format("INSERT INTO \"%s_positions\" (opaque_id, ts) VALUES (?, ?)", topic), new String[]{"id"});
             for (String opaqueId : positions) {
-                positionUpdate.setString(1, topic);
-                positionUpdate.setString(2, opaqueId);
-                positionUpdate.setTimestamp(3, Timestamp.from(ZonedDateTime.now().toInstant()));
+                positionUpdate.setString(1, opaqueId);
+                positionUpdate.setTimestamp(2, Timestamp.from(ZonedDateTime.now().toInstant()));
                 positionUpdate.executeUpdate();
                 ResultSet rs = positionUpdate.getGeneratedKeys();
                 if (rs.next()) {
@@ -119,7 +117,7 @@ class PostgresRawdataProducer implements RawdataProducer {
                 }
             }
 
-            PreparedStatement contentUpdate = tx.connection().prepareStatement("INSERT INTO content (position_fk_id, name, data) VALUES (?, ?, ?)");
+            PreparedStatement contentUpdate = tx.connection().prepareStatement(String.format("INSERT INTO \"%s_content\" (position_fk_id, name, data) VALUES (?, ?, ?)", topic));
             for (String opaqueId : positions) {
                 long id = idByOpaqueId.get(opaqueId);
                 PostgresRawdataMessageContent content = buffer.get(opaqueId);

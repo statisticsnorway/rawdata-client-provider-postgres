@@ -6,6 +6,7 @@ import no.ssb.rawdata.provider.postgres.tx.TransactionFactory;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
@@ -33,6 +34,19 @@ public class H2TransactionFactory implements TransactionFactory {
             throw new PersistenceException(e);
         }
     }
+
+    @Override
+    public boolean checkIfTableTopicExists(String topic, String table) {
+        try {
+            Connection conn = dataSource.getConnection();
+            ResultSet rs = conn.getMetaData().getTables(null, null, topic + "_" + table, null);
+            return rs.next();
+
+        } catch (SQLException e) {
+            throw new PersistenceException(e);
+        }
+    }
+
 
     @Override
     public DataSource dataSource() {

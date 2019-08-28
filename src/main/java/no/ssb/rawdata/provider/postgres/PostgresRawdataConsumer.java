@@ -48,9 +48,8 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
         String opaqueId = null;
         try (Transaction tx = transactionFactory.createTransaction(true)) {
             try {
-                PreparedStatement ps = tx.connection().prepareStatement("SELECT c.name, c.data, p.id, p.opaque_id FROM content c JOIN (SELECT id, opaque_id FROM positions WHERE topic = ? AND id > ? ORDER BY id LIMIT 1) p ON c.position_fk_id = p.id ORDER BY c.id");
-                ps.setString(1, topic);
-                ps.setLong(2, currentId.id);
+                PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT c.name, c.data, p.id, p.opaque_id FROM \"%s_content\" c JOIN (SELECT id, opaque_id FROM \"%s_positions\" WHERE id > ? ORDER BY id LIMIT 1) p ON c.position_fk_id = p.id ORDER BY c.position_fk_id, c.name", topic, topic));
+                ps.setLong(1, currentId.id);
                 ResultSet rs = ps.executeQuery();
                 while (rs.next()) {
                     String name = rs.getString(1);

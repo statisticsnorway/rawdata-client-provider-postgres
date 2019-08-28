@@ -6,6 +6,8 @@ import no.ssb.rawdata.provider.postgres.tx.TransactionFactory;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
@@ -33,6 +35,22 @@ public class PostgresTransactionFactory implements TransactionFactory {
             throw new PersistenceException(e);
         }
     }
+
+    @Override
+    public boolean checkIfTableTopicExists(String topic, String table) {
+        try (Transaction tx = createTransaction(true)) {
+            PreparedStatement ps = tx.connection().prepareStatement("SELECT 1 FROM pg_tables WHERE schemaname = ? AND tablename = ?");
+            ps.setString(1, "public");
+            ps.setString(2, topic + "_" + table);
+            ResultSet rs = ps.executeQuery();
+            return rs.next();
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+
 
     @Override
     public DataSource dataSource() {

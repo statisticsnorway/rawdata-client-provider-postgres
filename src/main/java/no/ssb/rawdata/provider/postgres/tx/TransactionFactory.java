@@ -36,6 +36,8 @@ public interface TransactionFactory {
      */
     Transaction createTransaction(boolean readOnly) throws PersistenceException;
 
+    boolean checkIfTableTopicExists(String topic, String table);
+
     DataSource dataSource();
 
     /**
