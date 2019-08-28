@@ -32,7 +32,7 @@ public class PostgresRawdataClientTest {
                 .values("postgres.driver.user", "rdc")
                 .values("postgres.driver.password", "rdc")
                 .values("postgres.driver.database", "rdc")
-                .values("h2.enabled", "true")
+                .values("h2.enabled", "false")
                 .values("h2.driver.url", "jdbc:h2:mem:rdc;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE")
                 .build();
     }

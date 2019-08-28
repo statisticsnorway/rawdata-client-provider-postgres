@@ -13,6 +13,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Scanner;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -52,11 +53,11 @@ public class PostgresRawdataClient implements RawdataClient {
 
     PostgresRawdataMessageId findMessageId(String topic, String position) {
         try (Transaction tx = transactionFactory.createTransaction(true)) {
-            PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT id FROM \"%s_positions\" WHERE opaque_id = ?", topic));
+            PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT ulid FROM \"%s_positions\" WHERE opaque_id = ?", topic));
             ps.setString(1, position);
             ResultSet rs = ps.executeQuery();
             if (rs.next()) {
-                long id = rs.getLong(1);
+                UUID id = (UUID) rs.getObject(1);
                 return new PostgresRawdataMessageId(topic, id, position);
             }
             return null;

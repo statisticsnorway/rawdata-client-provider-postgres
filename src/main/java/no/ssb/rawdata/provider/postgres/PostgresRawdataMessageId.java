@@ -1,13 +1,14 @@
 package no.ssb.rawdata.provider.postgres;
 
 import java.util.Objects;
+import java.util.UUID;
 
 class PostgresRawdataMessageId {
     final String topic;
-    final long id;
+    final UUID id;
     final String opaqueId;
 
-    PostgresRawdataMessageId(String topic, long id, String opaqueId) {
+    PostgresRawdataMessageId(String topic, UUID id, String opaqueId) {
         this.topic = topic;
         this.id = id;
         this.opaqueId = opaqueId;

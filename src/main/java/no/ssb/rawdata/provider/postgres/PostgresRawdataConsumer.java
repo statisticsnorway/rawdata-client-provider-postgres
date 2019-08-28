@@ -11,6 +11,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -32,7 +33,7 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
         this.transactionFactory = transactionFactory;
         this.topic = topic;
         if (initialPosition == null) {
-            initialPosition = new PostgresRawdataMessageId(topic, -1, null);
+            initialPosition = new PostgresRawdataMessageId(topic, null, null);
         }
         position.set(initialPosition);
     }
@@ -44,28 +45,28 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
 
     PostgresRawdataMessage findMessageContentOfIdAfterPosition(PostgresRawdataMessageId currentId) {
         Map<String, byte[]> contentMap = new LinkedHashMap<>();
-        long id = -1;
+        UUID uuid = null;
         String opaqueId = null;
         try (Transaction tx = transactionFactory.createTransaction(true)) {
             try {
-                PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT c.name, c.data, p.id, p.opaque_id FROM \"%s_content\" c JOIN (SELECT id, opaque_id FROM \"%s_positions\" WHERE id > ? ORDER BY id LIMIT 1) p ON c.position_fk_id = p.id ORDER BY c.position_fk_id, c.name", topic, topic));
-                ps.setLong(1, currentId.id);
+                PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT c.name, c.data, p.ulid, p.opaque_id FROM \"%s_content\" c JOIN (SELECT ulid, opaque_id FROM \"%s_positions\" WHERE ulid > ? ORDER BY ulid LIMIT 1) p ON c.position_fk_ulid = p.ulid ORDER BY c.position_fk_ulid, c.name", topic, topic));
+                ps.setObject(1, currentId.id);
                 ResultSet rs = ps.executeQuery();
                 while (rs.next()) {
                     String name = rs.getString(1);
                     byte[] data = rs.getBytes(2);
                     contentMap.put(name, data);
-                    id = rs.getLong(3);
+                    uuid = (UUID)rs.getObject(3);
                     opaqueId = rs.getString(4);
                 }
             } catch (SQLException e) {
                 throw new PersistenceException(e);
             }
         }
-        if (id == -1) {
+        if (contentMap.isEmpty()) {
             return null;
         }
-        return new PostgresRawdataMessage(new PostgresRawdataMessageId(topic, id, opaqueId), new PostgresRawdataMessageContent(opaqueId, contentMap));
+        return new PostgresRawdataMessage(new PostgresRawdataMessageId(topic, uuid, opaqueId), new PostgresRawdataMessageContent(opaqueId, contentMap));
     }
 
     @Override

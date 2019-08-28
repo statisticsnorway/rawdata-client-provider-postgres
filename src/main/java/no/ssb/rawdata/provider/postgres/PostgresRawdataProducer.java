@@ -1,5 +1,6 @@
 package no.ssb.rawdata.provider.postgres;
 
+import de.huxhorn.sulky.ulid.ULID;
 import no.ssb.rawdata.api.RawdataClosedException;
 import no.ssb.rawdata.api.RawdataContentNotBufferedException;
 import no.ssb.rawdata.api.RawdataMessage;
@@ -14,9 +15,11 @@ import java.sql.Timestamp;
 import java.time.ZonedDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 class PostgresRawdataProducer implements RawdataProducer {
 
@@ -24,6 +27,8 @@ class PostgresRawdataProducer implements RawdataProducer {
     private final String topic;
     private final Map<String, PostgresRawdataMessageContent> buffer = new ConcurrentHashMap<>();
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    private final ULID ulid = new ULID();
+    private final AtomicReference<ULID.Value> previousIdRef = new AtomicReference<>(ulid.nextValue());
 
     PostgresRawdataProducer(TransactionFactory transactionFactory, String topic) {
         this.transactionFactory = transactionFactory;
@@ -42,7 +47,7 @@ class PostgresRawdataProducer implements RawdataProducer {
         }
         try (Transaction tx = transactionFactory.createTransaction(true)) {
             try {
-                PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT opaque_id FROM \"%s_positions\" ORDER BY id DESC LIMIT 1", topic));
+                PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT opaque_id FROM \"%s_positions\" ORDER BY ulid DESC LIMIT 1", topic));
                 ResultSet rs = ps.executeQuery();
                 if (rs.next()) {
                     return rs.getString(1);
@@ -103,26 +108,40 @@ class PostgresRawdataProducer implements RawdataProducer {
                 throw new RawdataContentNotBufferedException(String.format("opaqueId %s is not in buffer", opaqueId));
             }
         }
-        Map<String, Long> idByOpaqueId = new LinkedHashMap<>();
+        Map<String, ULID.Value> ulidByPosition = new LinkedHashMap<>();
+        for (String position : positions) {
+            ULID.Value id = null;
+            do {
+                ULID.Value previousUlid = previousIdRef.get();
+                ULID.Value attemptedId = ulid.nextStrictlyMonotonicValue(previousUlid).orElseThrow();
+                if (previousIdRef.compareAndSet(previousUlid, attemptedId)) {
+                    id = attemptedId;
+                }
+            } while (id == null);
+            ulidByPosition.put(position, id);
+        }
+
+        Map<String, UUID> idByOpaqueId = new LinkedHashMap<>();
         try (Transaction tx = transactionFactory.createTransaction(false)) {
 
-            PreparedStatement positionUpdate = tx.connection().prepareStatement(String.format("INSERT INTO \"%s_positions\" (opaque_id, ts) VALUES (?, ?)", topic), new String[]{"id"});
+            PreparedStatement positionUpdate = tx.connection().prepareStatement(String.format("INSERT INTO \"%s_positions\" (ulid, opaque_id, ts) VALUES (?, ?, ?)", topic));
             for (String opaqueId : positions) {
-                positionUpdate.setString(1, opaqueId);
-                positionUpdate.setTimestamp(2, Timestamp.from(ZonedDateTime.now().toInstant()));
-                positionUpdate.executeUpdate();
-                ResultSet rs = positionUpdate.getGeneratedKeys();
-                if (rs.next()) {
-                    idByOpaqueId.put(opaqueId, rs.getLong(1));
-                }
+                ULID.Value ulidValue = ulidByPosition.get(opaqueId);
+                UUID uuid = UUID.nameUUIDFromBytes(ulidValue.toBytes());
+                idByOpaqueId.put(opaqueId, uuid);
+                positionUpdate.setObject(1, uuid);
+                positionUpdate.setString(2, opaqueId);
+                positionUpdate.setTimestamp(3, Timestamp.from(ZonedDateTime.now().toInstant()));
+                positionUpdate.addBatch();
             }
+            positionUpdate.executeBatch();
 
-            PreparedStatement contentUpdate = tx.connection().prepareStatement(String.format("INSERT INTO \"%s_content\" (position_fk_id, name, data) VALUES (?, ?, ?)", topic));
+            PreparedStatement contentUpdate = tx.connection().prepareStatement(String.format("INSERT INTO \"%s_content\" (position_fk_ulid, name, data) VALUES (?, ?, ?)", topic));
             for (String opaqueId : positions) {
-                long id = idByOpaqueId.get(opaqueId);
+                UUID uuid = idByOpaqueId.get(opaqueId);
                 PostgresRawdataMessageContent content = buffer.get(opaqueId);
                 for (String contentKey : content.keys()) {
-                    contentUpdate.setLong(1, id);
+                    contentUpdate.setObject(1, uuid);
                     contentUpdate.setString(2, contentKey);
                     contentUpdate.setBytes(3, content.get(contentKey));
                     contentUpdate.addBatch();
