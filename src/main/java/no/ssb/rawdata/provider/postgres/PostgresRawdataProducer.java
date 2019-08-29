@@ -107,7 +107,7 @@ class PostgresRawdataProducer implements RawdataProducer {
             PreparedStatement positionUpdate = tx.connection().prepareStatement(String.format("INSERT INTO \"%s_positions\" (ulid, opaque_id, ts) VALUES (?, ?, ?)", topic));
             for (String opaqueId : positions) {
                 ULID.Value ulidValue = ulidByPosition.get(opaqueId);
-                UUID uuid = UUID.nameUUIDFromBytes(ulidValue.toBytes());
+                UUID uuid = new UUID(ulidValue.getMostSignificantBits(), ulidValue.getLeastSignificantBits());
                 idByOpaqueId.put(opaqueId, uuid);
                 positionUpdate.setObject(1, uuid);
                 positionUpdate.setString(2, opaqueId);

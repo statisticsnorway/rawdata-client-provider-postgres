@@ -1,5 +1,6 @@
 package no.ssb.rawdata.provider.postgres;
 
+import de.huxhorn.sulky.ulid.ULID;
 import no.ssb.rawdata.api.RawdataClient;
 import no.ssb.rawdata.api.RawdataClosedException;
 import no.ssb.rawdata.api.RawdataConsumer;
@@ -53,7 +54,7 @@ public class PostgresRawdataClient implements RawdataClient {
         }
         try (Transaction tx = transactionFactory.createTransaction(true)) {
             try {
-                PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT opaque_id FROM \"%s_positions\" ORDER BY ulid_msb, ulid_lsb DESC LIMIT 1", topic));
+                PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT opaque_id FROM \"%s_positions\" ORDER BY ulid DESC LIMIT 1", topic));
                 ResultSet rs = ps.executeQuery();
                 if (rs.next()) {
                     return rs.getString(1);
@@ -78,8 +79,9 @@ public class PostgresRawdataClient implements RawdataClient {
             ps.setString(1, position);
             ResultSet rs = ps.executeQuery();
             if (rs.next()) {
-                UUID id = (UUID) rs.getObject(1);
-                return new PostgresRawdataMessageId(topic, id, position);
+                UUID uuid = (UUID) rs.getObject(1);
+                ULID.Value ulid = new ULID.Value(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
+                return new PostgresRawdataMessageId(topic, ulid, position);
             }
             return null;
         } catch (SQLException e) {

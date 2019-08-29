@@ -1,5 +1,6 @@
 package no.ssb.rawdata.provider.postgres;
 
+import de.huxhorn.sulky.ulid.ULID;
 import no.ssb.rawdata.api.RawdataClosedException;
 import no.ssb.rawdata.api.RawdataConsumer;
 import no.ssb.rawdata.api.RawdataMessage;
@@ -33,7 +34,7 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
         this.transactionFactory = transactionFactory;
         this.topic = topic;
         if (initialPosition == null) {
-            initialPosition = new PostgresRawdataMessageId(topic, null, null);
+            initialPosition = new PostgresRawdataMessageId(topic, new ULID.Value(0, 0), null);
         }
         position.set(initialPosition);
     }
@@ -50,13 +51,14 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
         try (Transaction tx = transactionFactory.createTransaction(true)) {
             try {
                 PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT c.name, c.data, p.ulid, p.opaque_id FROM \"%s_content\" c JOIN (SELECT ulid, opaque_id FROM \"%s_positions\" WHERE ulid > ? ORDER BY ulid LIMIT 1) p ON c.position_fk_ulid = p.ulid ORDER BY c.position_fk_ulid, c.name", topic, topic));
-                ps.setObject(1, currentId.id);
+                UUID currentUuid = new UUID(currentId.id.getMostSignificantBits(), currentId.id.getLeastSignificantBits());
+                ps.setObject(1, currentUuid);
                 ResultSet rs = ps.executeQuery();
                 while (rs.next()) {
                     String name = rs.getString(1);
                     byte[] data = rs.getBytes(2);
                     contentMap.put(name, data);
-                    uuid = (UUID)rs.getObject(3);
+                    uuid = (UUID) rs.getObject(3);
                     opaqueId = rs.getString(4);
                 }
             } catch (SQLException e) {
@@ -66,7 +68,8 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
         if (contentMap.isEmpty()) {
             return null;
         }
-        return new PostgresRawdataMessage(new PostgresRawdataMessageId(topic, uuid, opaqueId), new PostgresRawdataMessageContent(opaqueId, contentMap));
+        ULID.Value ulid = new ULID.Value(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
+        return new PostgresRawdataMessage(new PostgresRawdataMessageId(topic, ulid, opaqueId), new PostgresRawdataMessageContent(opaqueId, contentMap));
     }
 
     @Override

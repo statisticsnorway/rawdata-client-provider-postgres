@@ -1,14 +1,15 @@
 package no.ssb.rawdata.provider.postgres;
 
+import de.huxhorn.sulky.ulid.ULID;
+
 import java.util.Objects;
-import java.util.UUID;
 
 class PostgresRawdataMessageId {
     final String topic;
-    final UUID id;
+    final ULID.Value id;
     final String opaqueId;
 
-    PostgresRawdataMessageId(String topic, UUID id, String opaqueId) {
+    PostgresRawdataMessageId(String topic, ULID.Value id, String opaqueId) {
         this.topic = topic;
         this.id = id;
         this.opaqueId = opaqueId;
