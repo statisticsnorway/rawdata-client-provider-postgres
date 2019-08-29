@@ -19,7 +19,7 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class PostgresRawdataClient implements RawdataClient {
+class PostgresRawdataClient implements RawdataClient {
 
     final AtomicBoolean closed = new AtomicBoolean(false);
     final List<PostgresRawdataProducer> producers = new CopyOnWriteArrayList<>();

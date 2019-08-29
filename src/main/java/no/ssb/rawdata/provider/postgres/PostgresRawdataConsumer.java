@@ -23,7 +23,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class PostgresRawdataConsumer implements RawdataConsumer {
+class PostgresRawdataConsumer implements RawdataConsumer {
 
     static final CountDownLatch OPEN_LATCH = new CountDownLatch(0);
     final int DB_POLL_PREFETCH_POLL_INTERVAL_WHEN_EMPTY_MILLISECONDS = 1000;
@@ -39,7 +39,7 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
     final AtomicReference<Long> pendingPrefetchExpiry = new AtomicReference<>(System.currentTimeMillis());
     final int prefetchSize = 10;
 
-    public PostgresRawdataConsumer(TransactionFactory transactionFactory, String topic, PostgresRawdataMessageId initialPosition) {
+    PostgresRawdataConsumer(TransactionFactory transactionFactory, String topic, PostgresRawdataMessageId initialPosition) {
         this.transactionFactory = transactionFactory;
         this.topic = topic;
         if (initialPosition == null) {

@@ -7,12 +7,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-public class PostgresRawdataMessageContent implements RawdataMessage {
+class PostgresRawdataMessageContent implements RawdataMessage {
 
     private final String position;
     private final Map<String, byte[]> data;
 
-    public PostgresRawdataMessageContent(String position, Map<String, byte[]> data) {
+    PostgresRawdataMessageContent(String position, Map<String, byte[]> data) {
         if (position == null) {
             throw new IllegalArgumentException("position cannot be null");
         }

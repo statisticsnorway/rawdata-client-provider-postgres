@@ -2,12 +2,12 @@ package no.ssb.rawdata.provider.postgres;
 
 import java.util.Objects;
 
-public class PostgresRawdataMessage {
+class PostgresRawdataMessage {
 
     private final PostgresRawdataMessageId id;
     private final PostgresRawdataMessageContent content;
 
-    public PostgresRawdataMessage(PostgresRawdataMessageId id, PostgresRawdataMessageContent content) {
+    PostgresRawdataMessage(PostgresRawdataMessageId id, PostgresRawdataMessageContent content) {
         if (id == null) {
             throw new IllegalArgumentException("id cannot be null");
         }
@@ -18,11 +18,11 @@ public class PostgresRawdataMessage {
         this.content = content;
     }
 
-    public PostgresRawdataMessageId id() {
+    PostgresRawdataMessageId id() {
         return id;
     }
 
-    public PostgresRawdataMessageContent content() {
+    PostgresRawdataMessageContent content() {
         return content;
     }
 
