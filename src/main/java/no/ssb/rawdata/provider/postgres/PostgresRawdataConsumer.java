@@ -56,7 +56,7 @@ class PostgresRawdataConsumer implements RawdataConsumer {
 
     PostgresRawdataMessage findNextMessage() {
         CountDownLatch latch = OPEN_LATCH;
-        if (messageBuffer.size() < prefetchSize / 2 && pendingPrefetch.get().isDone()
+        if (messageBuffer.size() < 1 + (prefetchSize / 2) && pendingPrefetch.get().isDone()
                 && (pendingPrefetch.get().join() > 0 || pendingPrefetchExpiry.get() <= System.currentTimeMillis())) {
             pendingPrefetch.set(fetchNextBatchAsync(latch = new CountDownLatch(1)));
             pendingPrefetchExpiry.set(System.currentTimeMillis() + DB_POLL_PREFETCH_POLL_INTERVAL_WHEN_EMPTY_MILLISECONDS);
