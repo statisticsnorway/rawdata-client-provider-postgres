@@ -64,16 +64,20 @@ public class PostgresUUIDOrderingTest {
     @Test
     public void thatUUIDOrderingIsPreservedInDatabase() throws Exception {
         Random random = new Random();
-        int N = 10000;
+        int N = 100000;
         List<String> expectedPositions = new ArrayList<>(N);
+        for (int i = 0; i < N; i++) {
+            String position = random.nextInt(N) + "a" + i;
+            expectedPositions.add(position);
+        }
+        long startProduce = System.currentTimeMillis();
         try (RawdataProducer producer = client.producer("T1")) {
-            for (int i = 0; i < N; i++) {
-                String position = random.nextInt(N) + "a" + i;
+            for (String position : expectedPositions) {
                 producer.buffer(producer.builder().position(position).put("payload", new byte[8]));
-                expectedPositions.add(position);
             }
             producer.publish(expectedPositions);
         }
+        long endProduceStartConsume = System.currentTimeMillis();
         List<String> actualPositions = new ArrayList<>(N);
         try (RawdataConsumer consumer = client.consumer("T1")) {
             RawdataMessage message = consumer.receive(100, TimeUnit.MILLISECONDS);
@@ -82,6 +86,8 @@ public class PostgresUUIDOrderingTest {
                 message = consumer.receive(100, TimeUnit.MILLISECONDS);
             }
         }
+        long endConsume = System.currentTimeMillis();
         assertEquals(actualPositions, expectedPositions);
+        System.out.printf("Production: %d ms, Consumption: %d ms%n", endProduceStartConsume - startProduce, endConsume - endProduceStartConsume);
     }
 }
