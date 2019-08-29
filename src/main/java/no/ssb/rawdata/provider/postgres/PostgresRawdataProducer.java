@@ -2,14 +2,13 @@ package no.ssb.rawdata.provider.postgres;
 
 import de.huxhorn.sulky.ulid.ULID;
 import no.ssb.rawdata.api.RawdataClosedException;
-import no.ssb.rawdata.api.RawdataContentNotBufferedException;
 import no.ssb.rawdata.api.RawdataMessage;
+import no.ssb.rawdata.api.RawdataNotBufferedException;
 import no.ssb.rawdata.api.RawdataProducer;
 import no.ssb.rawdata.provider.postgres.tx.Transaction;
 import no.ssb.rawdata.provider.postgres.tx.TransactionFactory;
 
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.ZonedDateTime;
@@ -38,25 +37,6 @@ class PostgresRawdataProducer implements RawdataProducer {
     @Override
     public String topic() {
         return topic;
-    }
-
-    @Override
-    public String lastPosition() throws RawdataClosedException {
-        if (isClosed()) {
-            throw new RawdataClosedException();
-        }
-        try (Transaction tx = transactionFactory.createTransaction(true)) {
-            try {
-                PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT opaque_id FROM \"%s_positions\" ORDER BY ulid DESC LIMIT 1", topic));
-                ResultSet rs = ps.executeQuery();
-                if (rs.next()) {
-                    return rs.getString(1);
-                }
-                return null;
-            } catch (SQLException e) {
-                throw new PersistenceException(e);
-            }
-        }
     }
 
     @Override
@@ -102,10 +82,10 @@ class PostgresRawdataProducer implements RawdataProducer {
     }
 
     @Override
-    public void publish(String... positions) throws RawdataClosedException, RawdataContentNotBufferedException {
+    public void publish(String... positions) throws RawdataClosedException, RawdataNotBufferedException {
         for (String opaqueId : positions) {
             if (!buffer.containsKey(opaqueId)) {
-                throw new RawdataContentNotBufferedException(String.format("opaqueId %s is not in buffer", opaqueId));
+                throw new RawdataNotBufferedException(String.format("opaqueId %s is not in buffer", opaqueId));
             }
         }
         Map<String, ULID.Value> ulidByPosition = new LinkedHashMap<>();

@@ -5,8 +5,8 @@ import no.ssb.config.StoreBasedDynamicConfiguration;
 import no.ssb.rawdata.api.RawdataClient;
 import no.ssb.rawdata.api.RawdataClientInitializer;
 import no.ssb.rawdata.api.RawdataConsumer;
-import no.ssb.rawdata.api.RawdataContentNotBufferedException;
 import no.ssb.rawdata.api.RawdataMessage;
+import no.ssb.rawdata.api.RawdataNotBufferedException;
 import no.ssb.rawdata.api.RawdataProducer;
 import no.ssb.service.provider.api.ProviderConfigurator;
 import org.testng.annotations.AfterMethod;
@@ -57,10 +57,8 @@ public class PostgresRawdataClientTest {
     }
 
     @Test
-    public void thatLastPositionOfEmptyTopicCanBeReadByProducer() {
-        RawdataProducer producer = client.producer("the-topic");
-
-        assertEquals(producer.lastPosition(), null);
+    public void thatLastPositionOfEmptyTopicCanBeRead() {
+        assertEquals(client.lastPosition("the-topic"), null);
     }
 
     @Test
@@ -71,15 +69,15 @@ public class PostgresRawdataClientTest {
         producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
         producer.publish("a", "b");
 
-        assertEquals(producer.lastPosition(), "b");
+        assertEquals(client.lastPosition("the-topic"), "b");
 
         producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
         producer.publish("c");
 
-        assertEquals(producer.lastPosition(), "c");
+        assertEquals(client.lastPosition("the-topic"), "c");
     }
 
-    @Test(expectedExceptions = RawdataContentNotBufferedException.class)
+    @Test(expectedExceptions = RawdataNotBufferedException.class)
     public void thatPublishNonBufferedMessagesThrowsException() {
         RawdataProducer producer = client.producer("the-topic");
         producer.publish("unbuffered-1");
@@ -257,4 +255,45 @@ public class PostgresRawdataClientTest {
             assertNull(message);
         }
     }
+
+    @Test
+    public void thatSeekToWorks() throws Exception {
+        long timestampBeforeA;
+        long timestampBeforeB;
+        long timestampBeforeC;
+        long timestampBeforeD;
+        long timestampAfterD;
+        try (RawdataProducer producer = client.producer("the-topic")) {
+            producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
+            timestampBeforeA = System.currentTimeMillis();
+            producer.publish("a");
+            Thread.sleep(5);
+            producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
+            timestampBeforeB = System.currentTimeMillis();
+            producer.publish("b");
+            Thread.sleep(5);
+            producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
+            timestampBeforeC = System.currentTimeMillis();
+            producer.publish("c");
+            Thread.sleep(5);
+            producer.buffer(producer.builder().position("d").put("payload", new byte[7]));
+            timestampBeforeD = System.currentTimeMillis();
+            producer.publish("d");
+            Thread.sleep(5);
+            timestampAfterD = System.currentTimeMillis();
+        }
+        try (RawdataConsumer consumer = client.consumer("the-topic")) {
+            consumer.seek(timestampAfterD);
+            assertNull(consumer.receive(100, TimeUnit.MILLISECONDS));
+            consumer.seek(timestampBeforeD);
+            assertEquals("d", consumer.receive(100, TimeUnit.MILLISECONDS).position());
+            consumer.seek(timestampBeforeB);
+            assertEquals("b", consumer.receive(100, TimeUnit.MILLISECONDS).position());
+            consumer.seek(timestampBeforeC);
+            assertEquals("c", consumer.receive(100, TimeUnit.MILLISECONDS).position());
+            consumer.seek(timestampBeforeA);
+            assertEquals("a", consumer.receive(100, TimeUnit.MILLISECONDS).position());
+        }
+    }
+
 }

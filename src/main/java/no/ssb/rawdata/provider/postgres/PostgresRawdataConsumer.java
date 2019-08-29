@@ -109,6 +109,11 @@ public class PostgresRawdataConsumer implements RawdataConsumer {
     }
 
     @Override
+    public void seek(long timestamp) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public boolean isClosed() {
         return closed.get();
     }

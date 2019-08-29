@@ -1,6 +1,7 @@
 package no.ssb.rawdata.provider.postgres;
 
 import no.ssb.rawdata.api.RawdataClient;
+import no.ssb.rawdata.api.RawdataClosedException;
 import no.ssb.rawdata.api.RawdataConsumer;
 import no.ssb.rawdata.api.RawdataProducer;
 import no.ssb.rawdata.provider.postgres.tx.Transaction;
@@ -44,6 +45,26 @@ public class PostgresRawdataClient implements RawdataClient {
         consumers.add(consumer);
         return consumer;
     }
+
+    @Override
+    public String lastPosition(String topic) throws RawdataClosedException {
+        if (isClosed()) {
+            throw new RawdataClosedException();
+        }
+        try (Transaction tx = transactionFactory.createTransaction(true)) {
+            try {
+                PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT opaque_id FROM \"%s_positions\" ORDER BY ulid_msb, ulid_lsb DESC LIMIT 1", topic));
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) {
+                    return rs.getString(1);
+                }
+                return null;
+            } catch (SQLException e) {
+                throw new PersistenceException(e);
+            }
+        }
+    }
+
 
     void createTopicIfNotExists(String topic) {
         if (!transactionFactory.checkIfTableTopicExists(topic, "positions") || !transactionFactory.checkIfTableTopicExists(topic, "content")) {
