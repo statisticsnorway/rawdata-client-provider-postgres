@@ -37,7 +37,7 @@ class PostgresRawdataConsumer implements RawdataConsumer {
     final Deque<PostgresRawdataMessage> messageBuffer = new ConcurrentLinkedDeque<>();
     final AtomicReference<CompletableFuture<Integer>> pendingPrefetch = new AtomicReference<>(CompletableFuture.completedFuture(0));
     final AtomicReference<Long> pendingPrefetchExpiry = new AtomicReference<>(System.currentTimeMillis());
-    final int prefetchSize = 10;
+    final int prefetchSize = 100;
 
     PostgresRawdataConsumer(TransactionFactory transactionFactory, String topic, PostgresRawdataMessageId initialPosition) {
         this.transactionFactory = transactionFactory;
