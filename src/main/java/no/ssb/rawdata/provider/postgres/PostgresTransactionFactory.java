@@ -9,8 +9,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
 
 public class PostgresTransactionFactory implements TransactionFactory {
 
@@ -21,18 +19,25 @@ public class PostgresTransactionFactory implements TransactionFactory {
     }
 
     @Override
-    public <T> CompletableFuture<T> runAsyncInIsolatedTransaction(Function<? super Transaction, ? extends T> retryable, boolean readOnly) {
-        return CompletableFuture.supplyAsync(() -> retryable.apply(createTransaction(readOnly)));
-    }
-
-    @Override
     public PostgresTransaction createTransaction(boolean readOnly) throws PersistenceException {
+        PostgresTransaction postgresTransaction = null;
+        Connection connection = null;
         try {
-            Connection connection = dataSource.getConnection();
+            connection = dataSource.getConnection();
             connection.setAutoCommit(false);
-            return new PostgresTransaction(connection);
+            postgresTransaction = new PostgresTransaction(connection);
+            return postgresTransaction;
         } catch (SQLException e) {
             throw new PersistenceException(e);
+        } finally {
+            if (postgresTransaction == null && connection != null) {
+                // exceptional return, do not leave connection open
+                try {
+                    connection.close();
+                } catch (SQLException ex) {
+                    // ignore
+                }
+            }
         }
     }
 
