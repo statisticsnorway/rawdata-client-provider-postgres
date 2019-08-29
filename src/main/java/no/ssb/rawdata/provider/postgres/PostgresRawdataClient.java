@@ -26,7 +26,7 @@ public class PostgresRawdataClient implements RawdataClient {
     final List<PostgresRawdataConsumer> consumers = new CopyOnWriteArrayList<>();
     final TransactionFactory transactionFactory;
 
-    public PostgresRawdataClient(TransactionFactory transactionFactory) {
+    PostgresRawdataClient(TransactionFactory transactionFactory) {
         this.transactionFactory = transactionFactory;
     }
 
