@@ -27,6 +27,7 @@ public class PostgresRawdataClientTest {
     static DynamicConfiguration configuration() {
         return new StoreBasedDynamicConfiguration.Builder()
                 .values("rawdata.client.provider", "postgres")
+                .values("rawdata.postgres.consumer.prefetch-size", "1")
                 .values("postgres.driver.host", "localhost")
                 .values("postgres.driver.port", "5432")
                 .values("postgres.driver.user", "rdc")

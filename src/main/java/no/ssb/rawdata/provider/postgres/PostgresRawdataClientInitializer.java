@@ -32,13 +32,16 @@ public class PostgresRawdataClientInitializer implements RawdataClientInitialize
                 "postgres.driver.port",
                 "postgres.driver.user",
                 "postgres.driver.password",
-                "postgres.driver.database"
+                "postgres.driver.database",
+                "rawdata.postgres.consumer.prefetch-size"
         );
     }
 
     @Override
     public RawdataClient initialize(Map<String, String> configMap) {
         boolean enableH2DatabaseDriver = Boolean.parseBoolean(configMap.get("h2.enabled"));
+
+        int consumerPrefetchSize = Integer.parseInt(configMap.get("rawdata.postgres.consumer.prefetch-size"));
 
         if (!enableH2DatabaseDriver) {
             HikariDataSource dataSource = openPostgresDataSource(
@@ -49,7 +52,7 @@ public class PostgresRawdataClientInitializer implements RawdataClientInitialize
                     configMap.get("postgres.driver.database")
             );
 
-            return new PostgresRawdataClient(new PostgresTransactionFactory(dataSource));
+            return new PostgresRawdataClient(new PostgresTransactionFactory(dataSource), consumerPrefetchSize);
 
         } else {
             HikariDataSource dataSource = openH2DataSource(
@@ -61,7 +64,7 @@ public class PostgresRawdataClientInitializer implements RawdataClientInitialize
             try {
                 Class<? extends TransactionFactory> transactionFactoryClass = (Class<? extends TransactionFactory>) Class.forName("no.ssb.rawdata.provider.postgres.H2TransactionFactory");
                 TransactionFactory transactionFactory = transactionFactoryClass.getDeclaredConstructor(HikariDataSource.class).newInstance(dataSource);
-                return new PostgresRawdataClient(transactionFactory);
+                return new PostgresRawdataClient(transactionFactory, consumerPrefetchSize);
 
             } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
                 throw new RuntimeException(e);

@@ -25,9 +25,11 @@ class PostgresRawdataClient implements RawdataClient {
     final List<PostgresRawdataProducer> producers = new CopyOnWriteArrayList<>();
     final List<PostgresRawdataConsumer> consumers = new CopyOnWriteArrayList<>();
     final TransactionFactory transactionFactory;
+    final int consumerPrefetchSize;
 
-    PostgresRawdataClient(TransactionFactory transactionFactory) {
+    PostgresRawdataClient(TransactionFactory transactionFactory, int consumerPrefetchSize) {
         this.transactionFactory = transactionFactory;
+        this.consumerPrefetchSize = consumerPrefetchSize;
     }
 
     @Override
@@ -42,7 +44,7 @@ class PostgresRawdataClient implements RawdataClient {
     public RawdataConsumer consumer(String topicName, String initialPosition) {
         createTopicIfNotExists(topicName);
         PostgresRawdataMessageId initialMessageId = findMessageId(topicName, initialPosition);
-        PostgresRawdataConsumer consumer = new PostgresRawdataConsumer(transactionFactory, topicName, initialMessageId);
+        PostgresRawdataConsumer consumer = new PostgresRawdataConsumer(transactionFactory, topicName, initialMessageId, consumerPrefetchSize);
         consumers.add(consumer);
         return consumer;
     }
