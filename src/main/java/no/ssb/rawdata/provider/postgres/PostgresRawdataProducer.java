@@ -11,8 +11,7 @@ import no.ssb.rawdata.provider.postgres.tx.TransactionFactory;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Timestamp;
-import java.time.ZonedDateTime;
-import java.util.LinkedHashMap;
+import java.util.Date;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -24,7 +23,7 @@ class PostgresRawdataProducer implements RawdataProducer {
 
     private final TransactionFactory transactionFactory;
     private final String topic;
-    private final Map<String, PostgresRawdataMessageContent> buffer = new ConcurrentHashMap<>();
+    private final Map<String, PostgresRawdataMessage.Builder> buffer = new ConcurrentHashMap<>();
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final ULID ulid = new ULID();
     private final AtomicReference<ULID.Value> previousIdRef = new AtomicReference<>(ulid.nextValue());
@@ -44,41 +43,17 @@ class PostgresRawdataProducer implements RawdataProducer {
         if (isClosed()) {
             throw new RawdataClosedException();
         }
-        return new RawdataMessage.Builder() {
-            String position;
-            Map<String, byte[]> data = new LinkedHashMap<>();
-
-            @Override
-            public RawdataMessage.Builder position(String position) {
-                this.position = position;
-                return this;
-            }
-
-            @Override
-            public RawdataMessage.Builder put(String key, byte[] payload) {
-                data.put(key, payload);
-                return this;
-            }
-
-            @Override
-            public PostgresRawdataMessageContent build() {
-                return new PostgresRawdataMessageContent(position, data);
-            }
-        };
+        return new PostgresRawdataMessage.Builder();
     }
 
     @Override
-    public RawdataMessage buffer(RawdataMessage.Builder builder) throws RawdataClosedException {
-        return buffer(builder.build());
-    }
-
-    @Override
-    public RawdataMessage buffer(RawdataMessage message) throws RawdataClosedException {
+    public RawdataProducer buffer(RawdataMessage.Builder _builder) throws RawdataClosedException {
         if (isClosed()) {
             throw new RawdataClosedException();
         }
-        buffer.put(message.position(), (PostgresRawdataMessageContent) message);
-        return message;
+        PostgresRawdataMessage.Builder builder = (PostgresRawdataMessage.Builder) _builder;
+        buffer.put(builder.position, builder);
+        return this;
     }
 
     @Override
@@ -88,45 +63,42 @@ class PostgresRawdataProducer implements RawdataProducer {
                 throw new RawdataNotBufferedException(String.format("opaqueId %s is not in buffer", opaqueId));
             }
         }
-        Map<String, ULID.Value> ulidByPosition = new LinkedHashMap<>();
-        for (String position : positions) {
-            ULID.Value id = null;
-            do {
-                ULID.Value previousUlid = previousIdRef.get();
-                ULID.Value attemptedId = ulid.nextStrictlyMonotonicValue(previousUlid).orElseThrow();
-                if (previousIdRef.compareAndSet(previousUlid, attemptedId)) {
-                    id = attemptedId;
-                }
-            } while (id == null);
-            ulidByPosition.put(position, id);
-        }
 
-        Map<String, UUID> idByOpaqueId = new LinkedHashMap<>();
         try (Transaction tx = transactionFactory.createTransaction(false)) {
 
             PreparedStatement positionUpdate = tx.connection().prepareStatement(String.format("INSERT INTO \"%s_positions\" (ulid, opaque_id, ts) VALUES (?, ?, ?)", topic));
-            for (String opaqueId : positions) {
-                ULID.Value ulidValue = ulidByPosition.get(opaqueId);
-                UUID uuid = new UUID(ulidValue.getMostSignificantBits(), ulidValue.getLeastSignificantBits());
-                idByOpaqueId.put(opaqueId, uuid);
-                positionUpdate.setObject(1, uuid);
-                positionUpdate.setString(2, opaqueId);
-                positionUpdate.setTimestamp(3, Timestamp.from(ZonedDateTime.now().toInstant()));
-                positionUpdate.addBatch();
-            }
-            positionUpdate.executeBatch();
 
             PreparedStatement contentUpdate = tx.connection().prepareStatement(String.format("INSERT INTO \"%s_content\" (position_fk_ulid, name, data) VALUES (?, ?, ?)", topic));
+
             for (String opaqueId : positions) {
-                UUID uuid = idByOpaqueId.get(opaqueId);
-                PostgresRawdataMessageContent content = buffer.get(opaqueId);
-                for (String contentKey : content.keys()) {
+
+                PostgresRawdataMessage.Builder builder = buffer.get(opaqueId);
+
+                ULID.Value id = getOrGenerateNextUlid(builder);
+                UUID uuid = new UUID(id.getMostSignificantBits(), id.getLeastSignificantBits());
+
+                /*
+                 * position
+                 */
+                positionUpdate.setObject(1, uuid);
+                positionUpdate.setString(2, opaqueId);
+                positionUpdate.setTimestamp(3, Timestamp.from(new Date(id.timestamp()).toInstant()));
+                positionUpdate.addBatch();
+
+                /*
+                 * content
+                 */
+
+                for (Map.Entry<String, byte[]> entry : builder.data.entrySet()) {
                     contentUpdate.setObject(1, uuid);
-                    contentUpdate.setString(2, contentKey);
-                    contentUpdate.setBytes(3, content.get(contentKey));
+                    contentUpdate.setString(2, entry.getKey());
+                    contentUpdate.setBytes(3, entry.getValue());
                     contentUpdate.addBatch();
                 }
             }
+
+            positionUpdate.executeBatch();
+
             contentUpdate.executeBatch();
 
         } catch (SQLException e) {
@@ -137,6 +109,18 @@ class PostgresRawdataProducer implements RawdataProducer {
         for (String opaqueId : positions) {
             buffer.remove(opaqueId);
         }
+    }
+
+    private ULID.Value getOrGenerateNextUlid(PostgresRawdataMessage.Builder builder) {
+        ULID.Value id = builder.ulid;
+        while (id == null) {
+            ULID.Value previousUlid = previousIdRef.get();
+            ULID.Value attemptedId = RawdataProducer.nextMonotonicUlid(this.ulid, previousUlid);
+            if (previousIdRef.compareAndSet(previousUlid, attemptedId)) {
+                id = attemptedId;
+            }
+        }
+        return id;
     }
 
     @Override

@@ -25,6 +25,7 @@ public class PostgresUUIDOrderingTest {
         return new StoreBasedDynamicConfiguration.Builder()
                 .values("rawdata.client.provider", "postgres")
                 .values("rawdata.postgres.consumer.prefetch-size", "100")
+                .values("rawdata.postgres.consumer.prefetch-poll-interval-when-empty", "1000")
                 .values("postgres.driver.host", "localhost")
                 .values("postgres.driver.port", "5432")
                 .values("postgres.driver.user", "rdc")

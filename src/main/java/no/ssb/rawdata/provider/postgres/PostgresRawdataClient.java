@@ -4,6 +4,7 @@ import de.huxhorn.sulky.ulid.ULID;
 import no.ssb.rawdata.api.RawdataClient;
 import no.ssb.rawdata.api.RawdataClosedException;
 import no.ssb.rawdata.api.RawdataConsumer;
+import no.ssb.rawdata.api.RawdataMessage;
 import no.ssb.rawdata.api.RawdataProducer;
 import no.ssb.rawdata.provider.postgres.tx.Transaction;
 import no.ssb.rawdata.provider.postgres.tx.TransactionFactory;
@@ -13,7 +14,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -26,10 +29,12 @@ class PostgresRawdataClient implements RawdataClient {
     final List<PostgresRawdataConsumer> consumers = new CopyOnWriteArrayList<>();
     final TransactionFactory transactionFactory;
     final int consumerPrefetchSize;
+    final int dbPrefetchPollIntervalWhenEmptyMilliseconds;
 
-    PostgresRawdataClient(TransactionFactory transactionFactory, int consumerPrefetchSize) {
+    PostgresRawdataClient(TransactionFactory transactionFactory, int consumerPrefetchSize, int dbPrefetchPollIntervalWhenEmptyMilliseconds) {
         this.transactionFactory = transactionFactory;
         this.consumerPrefetchSize = consumerPrefetchSize;
+        this.dbPrefetchPollIntervalWhenEmptyMilliseconds = dbPrefetchPollIntervalWhenEmptyMilliseconds;
     }
 
     @Override
@@ -41,41 +46,48 @@ class PostgresRawdataClient implements RawdataClient {
     }
 
     @Override
-    public RawdataConsumer consumer(String topicName, String initialPosition) {
-        createTopicIfNotExists(topicName);
-        PostgresRawdataMessageId initialMessageId = findMessageId(topicName, initialPosition);
-        PostgresRawdataConsumer consumer = new PostgresRawdataConsumer(transactionFactory, topicName, initialMessageId, consumerPrefetchSize);
+    public RawdataConsumer consumer(String topic, ULID.Value initialPosition) {
+        createTopicIfNotExists(topic);
+        PostgresRawdataConsumer consumer = new PostgresRawdataConsumer(transactionFactory, topic, initialPosition, consumerPrefetchSize, dbPrefetchPollIntervalWhenEmptyMilliseconds);
         consumers.add(consumer);
         return consumer;
     }
 
     @Override
-    public String lastPosition(String topic) throws RawdataClosedException {
+    public RawdataMessage lastMessage(String topic) throws RawdataClosedException {
         if (isClosed()) {
             throw new RawdataClosedException();
         }
         try (Transaction tx = transactionFactory.createTransaction(true)) {
-            try {
-                PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT opaque_id FROM \"%s_positions\" ORDER BY ulid DESC LIMIT 1", topic));
-                ResultSet rs = ps.executeQuery();
-                if (rs.next()) {
-                    return rs.getString(1);
-                }
-                return null;
-            } catch (SQLException e) {
-                throw new PersistenceException(e);
+            ULID.Value ulid = null;
+            String opaqueId = null;
+            Map<String, byte[]> contentMap = new LinkedHashMap<>();
+            String sql = String.format(
+                    "SELECT p.ulid, p.opaque_id, c.name, c.data " +
+                            "FROM (SELECT ulid, opaque_id FROM \"%s_positions\" ORDER BY ulid DESC LIMIT 1) p " +
+                            "LEFT JOIN \"%s_content\" c ON p.ulid = c.position_fk_ulid",
+                    topic, topic);
+            PreparedStatement ps = tx.connection().prepareStatement(sql);
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                UUID uuid = (UUID) rs.getObject(1);
+                ulid = new ULID.Value(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
+                opaqueId = rs.getString(2);
+                String name = rs.getString(3);
+                byte[] data = rs.getBytes(4);
+                contentMap.put(name, data);
             }
+            if (ulid == null) {
+                return null;
+            }
+            return new PostgresRawdataMessage(ulid, opaqueId, contentMap);
+        } catch (SQLException e) {
+            throw new PersistenceException(e);
         }
     }
 
-
-    void createTopicIfNotExists(String topic) {
-        if (!transactionFactory.checkIfTableTopicExists(topic, "positions") || !transactionFactory.checkIfTableTopicExists(topic, "content")) {
-            dropOrCreateDatabase(topic);
-        }
-    }
-
-    PostgresRawdataMessageId findMessageId(String topic, String position) {
+    @Override
+    public ULID.Value ulidOfPosition(String topic, String position) {
         try (Transaction tx = transactionFactory.createTransaction(true)) {
             PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT ulid FROM \"%s_positions\" WHERE opaque_id = ?", topic));
             ps.setString(1, position);
@@ -83,11 +95,18 @@ class PostgresRawdataClient implements RawdataClient {
             if (rs.next()) {
                 UUID uuid = (UUID) rs.getObject(1);
                 ULID.Value ulid = new ULID.Value(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
-                return new PostgresRawdataMessageId(topic, ulid, position);
+                return ulid;
             }
             return null;
         } catch (SQLException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+
+    void createTopicIfNotExists(String topic) {
+        if (!transactionFactory.checkIfTableTopicExists(topic, "positions") || !transactionFactory.checkIfTableTopicExists(topic, "content")) {
+            dropOrCreateDatabase(topic);
         }
     }
 

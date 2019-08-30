@@ -26,11 +26,11 @@ import java.util.concurrent.locks.ReentrantLock;
 class PostgresRawdataConsumer implements RawdataConsumer {
 
     static final CountDownLatch OPEN_LATCH = new CountDownLatch(0);
-    final int DB_POLL_PREFETCH_POLL_INTERVAL_WHEN_EMPTY_MILLISECONDS = 1000;
+    final int dbPrefetchPollIntervalWhenEmptyMilliseconds;
 
     final TransactionFactory transactionFactory;
     final String topic;
-    final AtomicReference<PostgresRawdataMessageId> position = new AtomicReference<>();
+    final AtomicReference<ULID.Value> position = new AtomicReference<>();
     final AtomicBoolean closed = new AtomicBoolean(false);
     final Lock pollLock = new ReentrantLock();
     final Condition condition = pollLock.newCondition();
@@ -39,12 +39,13 @@ class PostgresRawdataConsumer implements RawdataConsumer {
     final AtomicReference<Long> pendingPrefetchExpiry = new AtomicReference<>(System.currentTimeMillis());
     final int prefetchSize;
 
-    PostgresRawdataConsumer(TransactionFactory transactionFactory, String topic, PostgresRawdataMessageId initialPosition, int prefetchSize) {
+    PostgresRawdataConsumer(TransactionFactory transactionFactory, String topic, ULID.Value initialPosition, int prefetchSize, int dbPrefetchPollIntervalWhenEmptyMilliseconds) {
         this.transactionFactory = transactionFactory;
         this.prefetchSize = prefetchSize;
+        this.dbPrefetchPollIntervalWhenEmptyMilliseconds = dbPrefetchPollIntervalWhenEmptyMilliseconds;
         this.topic = topic;
         if (initialPosition == null) {
-            initialPosition = new PostgresRawdataMessageId(topic, new ULID.Value(0, 0), null);
+            initialPosition = RawdataConsumer.beginningOfTime();
         }
         position.set(initialPosition);
     }
@@ -59,7 +60,7 @@ class PostgresRawdataConsumer implements RawdataConsumer {
         if (messageBuffer.size() < 1 + (prefetchSize / 2) && pendingPrefetch.get().isDone()
                 && (pendingPrefetch.get().join() > 0 || pendingPrefetchExpiry.get() <= System.currentTimeMillis())) {
             pendingPrefetch.set(fetchNextBatchAsync(latch = new CountDownLatch(1)));
-            pendingPrefetchExpiry.set(System.currentTimeMillis() + DB_POLL_PREFETCH_POLL_INTERVAL_WHEN_EMPTY_MILLISECONDS);
+            pendingPrefetchExpiry.set(System.currentTimeMillis() + dbPrefetchPollIntervalWhenEmptyMilliseconds);
         }
         while (messageBuffer.isEmpty() && !pendingPrefetch.get().isDone()) {
             try {
@@ -77,8 +78,15 @@ class PostgresRawdataConsumer implements RawdataConsumer {
     private CompletableFuture<Integer> fetchNextBatchAsync(CountDownLatch cdl) {
         return transactionFactory.runAsyncInIsolatedTransaction(tx -> {
             try {
-                PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT c.name, c.data, p.ulid, p.opaque_id FROM \"%s_content\" c JOIN (SELECT ulid, opaque_id FROM \"%s_positions\" WHERE ulid > ? ORDER BY ulid LIMIT ?) p ON c.position_fk_ulid = p.ulid ORDER BY c.position_fk_ulid, c.name", topic, topic));
-                UUID currentUuid = new UUID(position.get().id.getMostSignificantBits(), position.get().id.getLeastSignificantBits());
+                String sql = String.format(
+                        "SELECT c.name, c.data, p.ulid, p.opaque_id " +
+                                "FROM (SELECT ulid, opaque_id FROM \"%s_positions\" WHERE ulid > ? ORDER BY ulid LIMIT ?) p " +
+                                "LEFT JOIN \"%s_content\" c ON c.position_fk_ulid = p.ulid " +
+                                "ORDER BY p.ulid, c.name",
+                        topic, topic
+                );
+                PreparedStatement ps = tx.connection().prepareStatement(sql);
+                UUID currentUuid = new UUID(position.get().getMostSignificantBits(), position.get().getLeastSignificantBits());
                 ps.setObject(1, currentUuid);
                 ps.setInt(2, prefetchSize);
                 ResultSet rs = ps.executeQuery();
@@ -98,7 +106,7 @@ class PostgresRawdataConsumer implements RawdataConsumer {
                         prevOpaqueId = opaqueId;
                     }
                     if (!ulid.equals(prevUlid)) {
-                        messageBuffer.add(prevMessage = new PostgresRawdataMessage(new PostgresRawdataMessageId(topic, prevUlid, prevOpaqueId), new PostgresRawdataMessageContent(prevOpaqueId, contentMap)));
+                        messageBuffer.add(prevMessage = new PostgresRawdataMessage(prevUlid, prevOpaqueId, contentMap));
                         if (i++ == 0) {
                             cdl.countDown(); // early signal that at least one message is available.
                         }
@@ -110,10 +118,10 @@ class PostgresRawdataConsumer implements RawdataConsumer {
                 }
                 if (prevUlid != null) {
                     i++;
-                    messageBuffer.add(prevMessage = new PostgresRawdataMessage(new PostgresRawdataMessageId(topic, prevUlid, prevOpaqueId), new PostgresRawdataMessageContent(prevOpaqueId, contentMap)));
+                    messageBuffer.add(prevMessage = new PostgresRawdataMessage(prevUlid, prevOpaqueId, contentMap));
                 }
                 if (prevMessage != null) {
-                    position.set(prevMessage.id());
+                    position.set(prevMessage.ulid());
                 }
                 return i;
             } catch (SQLException e) {
@@ -125,14 +133,14 @@ class PostgresRawdataConsumer implements RawdataConsumer {
     }
 
     @Override
-    public PostgresRawdataMessageContent receive(int timeout, TimeUnit unit) throws InterruptedException {
+    public PostgresRawdataMessage receive(int timeout, TimeUnit unit) throws InterruptedException {
         int pollIntervalNanos = 250 * 1000 * 1000;
         if (isClosed()) {
             throw new RawdataClosedException();
         }
         long expireTimeNano = System.nanoTime() + unit.toNanos(timeout);
         if (!pollLock.tryLock()) {
-            throw new RuntimeException("Concurrent access to receive not allowed");
+            throw new RuntimeException("Concurrent access between calls to receive and seek not allowed");
         }
         try {
             PostgresRawdataMessage message = findNextMessage();
@@ -144,7 +152,7 @@ class PostgresRawdataConsumer implements RawdataConsumer {
                 condition.await(Math.min(durationNano, pollIntervalNanos), TimeUnit.NANOSECONDS);
                 message = findNextMessage();
             }
-            return message.content();
+            return message;
         } finally {
             pollLock.unlock();
         }
@@ -164,7 +172,19 @@ class PostgresRawdataConsumer implements RawdataConsumer {
 
     @Override
     public void seek(long timestamp) {
-        throw new UnsupportedOperationException();
+        if (!pollLock.tryLock()) {
+            throw new RuntimeException("Concurrent access between calls to receive and seek not allowed");
+        }
+        try {
+            ULID.Value ulid = RawdataConsumer.beginningOfTime(timestamp);
+            // String uuid = new UUID(ulid.getMostSignificantBits(), ulid.getLeastSignificantBits()).toString(); // for debugging
+            position.set(ulid);
+            pendingPrefetch.get().join();
+            messageBuffer.clear();
+            pendingPrefetchExpiry.set(System.currentTimeMillis());
+        } finally {
+            pollLock.unlock();
+        }
     }
 
     @Override
