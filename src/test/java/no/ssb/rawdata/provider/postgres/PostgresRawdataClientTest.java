@@ -67,13 +67,13 @@ public class PostgresRawdataClientTest {
     public void thatLastPositionOfProducerCanBeRead() {
         RawdataProducer producer = client.producer("the-topic");
 
-        producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
-        producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
+        producer.buffer(producer.builder().position("a").put("payload1", new byte[5]).put("payload2", new byte[5]));
+        producer.buffer(producer.builder().position("b").put("payload1", new byte[3]).put("payload2", new byte[3]));
         producer.publish("a", "b");
 
         assertEquals(client.lastMessage("the-topic").position(), "b");
 
-        producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
+        producer.buffer(producer.builder().position("c").put("payload1", new byte[7]).put("payload2", new byte[7]));
         producer.publish("c");
 
         assertEquals(client.lastMessage("the-topic").position(), "c");
@@ -90,11 +90,12 @@ public class PostgresRawdataClientTest {
         RawdataProducer producer = client.producer("the-topic");
         RawdataConsumer consumer = client.consumer("the-topic");
 
-        producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
+        producer.buffer(producer.builder().position("a").put("payload1", new byte[5]).put("payload2", new byte[5]));
         producer.publish("a");
 
         RawdataMessage message = consumer.receive(1, TimeUnit.SECONDS);
         assertEquals(message.position(), "a");
+        assertEquals(message.keys().size(), 2);
     }
 
     @Test
@@ -104,11 +105,12 @@ public class PostgresRawdataClientTest {
 
         CompletableFuture<? extends RawdataMessage> future = consumer.receiveAsync();
 
-        producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
+        producer.buffer(producer.builder().position("a").put("payload1", new byte[5]).put("payload2", new byte[5]));
         producer.publish("a");
 
         RawdataMessage message = future.join();
         assertEquals(message.position(), "a");
+        assertEquals(message.keys().size(), 2);
     }
 
     @Test
@@ -116,9 +118,9 @@ public class PostgresRawdataClientTest {
         RawdataProducer producer = client.producer("the-topic");
         RawdataConsumer consumer = client.consumer("the-topic");
 
-        producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
-        producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
-        producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
+        producer.buffer(producer.builder().position("a").put("payload1", new byte[5]).put("payload2", new byte[5]));
+        producer.buffer(producer.builder().position("b").put("payload1", new byte[3]).put("payload2", new byte[3]));
+        producer.buffer(producer.builder().position("c").put("payload1", new byte[7]).put("payload2", new byte[7]));
         producer.publish("a", "b", "c");
 
         RawdataMessage message1 = consumer.receive(1, TimeUnit.SECONDS);
@@ -136,9 +138,9 @@ public class PostgresRawdataClientTest {
 
         CompletableFuture<List<RawdataMessage>> future = receiveAsyncAddMessageAndRepeatRecursive(consumer, "c", new ArrayList<>());
 
-        producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
-        producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
-        producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
+        producer.buffer(producer.builder().position("a").put("payload1", new byte[5]).put("payload2", new byte[5]));
+        producer.buffer(producer.builder().position("b").put("payload1", new byte[3]).put("payload2", new byte[3]));
+        producer.buffer(producer.builder().position("c").put("payload1", new byte[7]).put("payload2", new byte[7]));
         producer.publish("a", "b", "c");
 
         List<RawdataMessage> messages = future.join();
@@ -167,9 +169,9 @@ public class PostgresRawdataClientTest {
         CompletableFuture<List<RawdataMessage>> future1 = receiveAsyncAddMessageAndRepeatRecursive(consumer1, "c", new ArrayList<>());
         CompletableFuture<List<RawdataMessage>> future2 = receiveAsyncAddMessageAndRepeatRecursive(consumer2, "c", new ArrayList<>());
 
-        producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
-        producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
-        producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
+        producer.buffer(producer.builder().position("a").put("payload1", new byte[5]).put("payload2", new byte[5]));
+        producer.buffer(producer.builder().position("b").put("payload1", new byte[3]).put("payload2", new byte[3]));
+        producer.buffer(producer.builder().position("c").put("payload1", new byte[7]).put("payload2", new byte[7]));
         producer.publish("a", "b", "c");
 
         List<RawdataMessage> messages1 = future1.join();
@@ -186,10 +188,10 @@ public class PostgresRawdataClientTest {
     @Test
     public void thatConsumerCanReadFromBeginning() throws Exception {
         try (RawdataProducer producer = client.producer("the-topic")) {
-            producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
-            producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
-            producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
-            producer.buffer(producer.builder().position("d").put("payload", new byte[7]));
+            producer.buffer(producer.builder().position("a").put("payload1", new byte[5]).put("payload2", new byte[5]));
+            producer.buffer(producer.builder().position("b").put("payload1", new byte[3]).put("payload2", new byte[3]));
+            producer.buffer(producer.builder().position("c").put("payload1", new byte[7]).put("payload2", new byte[7]));
+            producer.buffer(producer.builder().position("d").put("payload1", new byte[7]).put("payload2", new byte[7]));
             producer.publish("a", "b", "c", "d");
         }
         try (RawdataConsumer consumer = client.consumer("the-topic")) {
@@ -201,10 +203,10 @@ public class PostgresRawdataClientTest {
     @Test
     public void thatConsumerCanReadFromFirstMessage() throws Exception {
         try (RawdataProducer producer = client.producer("the-topic")) {
-            producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
-            producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
-            producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
-            producer.buffer(producer.builder().position("d").put("payload", new byte[7]));
+            producer.buffer(producer.builder().position("a").put("payload1", new byte[5]).put("payload2", new byte[5]));
+            producer.buffer(producer.builder().position("b").put("payload1", new byte[3]).put("payload2", new byte[3]));
+            producer.buffer(producer.builder().position("c").put("payload1", new byte[7]).put("payload2", new byte[7]));
+            producer.buffer(producer.builder().position("d").put("payload1", new byte[7]).put("payload2", new byte[7]));
             producer.publish("a", "b", "c", "d");
         }
         try (RawdataConsumer consumer = client.consumer("the-topic", "a")) {
@@ -216,13 +218,17 @@ public class PostgresRawdataClientTest {
     @Test
     public void thatConsumerCanReadFromMiddle() throws Exception {
         try (RawdataProducer producer = client.producer("the-topic")) {
-            producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
-            producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
-            producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
-            producer.buffer(producer.builder().position("d").put("payload", new byte[7]));
+            producer.buffer(producer.builder().position("a").put("payload1", new byte[5]).put("payload2", new byte[5]));
+            producer.buffer(producer.builder().position("b").put("payload1", new byte[3]).put("payload2", new byte[3]));
+            producer.buffer(producer.builder().position("c").put("payload1", new byte[7]).put("payload2", new byte[7]));
+            producer.buffer(producer.builder().position("d").put("payload1", new byte[7]).put("payload2", new byte[7]));
             producer.publish("a", "b", "c", "d");
         }
         try (RawdataConsumer consumer = client.consumer("the-topic", "b")) {
+            RawdataMessage message = consumer.receive(1, TimeUnit.SECONDS);
+            assertEquals(message.position(), "c");
+        }
+        try (RawdataConsumer consumer = client.consumer("the-topic", "c", true)) {
             RawdataMessage message = consumer.receive(1, TimeUnit.SECONDS);
             assertEquals(message.position(), "c");
         }
@@ -231,10 +237,10 @@ public class PostgresRawdataClientTest {
     @Test
     public void thatConsumerCanReadFromRightBeforeLast() throws Exception {
         try (RawdataProducer producer = client.producer("the-topic")) {
-            producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
-            producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
-            producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
-            producer.buffer(producer.builder().position("d").put("payload", new byte[7]));
+            producer.buffer(producer.builder().position("a").put("payload1", new byte[5]).put("payload2", new byte[5]));
+            producer.buffer(producer.builder().position("b").put("payload1", new byte[3]).put("payload2", new byte[3]));
+            producer.buffer(producer.builder().position("c").put("payload1", new byte[7]).put("payload2", new byte[7]));
+            producer.buffer(producer.builder().position("d").put("payload1", new byte[7]).put("payload2", new byte[7]));
             producer.publish("a", "b", "c", "d");
         }
         try (RawdataConsumer consumer = client.consumer("the-topic", "c")) {
@@ -246,10 +252,10 @@ public class PostgresRawdataClientTest {
     @Test
     public void thatConsumerCanReadFromLast() throws Exception {
         try (RawdataProducer producer = client.producer("the-topic")) {
-            producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
-            producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
-            producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
-            producer.buffer(producer.builder().position("d").put("payload", new byte[7]));
+            producer.buffer(producer.builder().position("a").put("payload1", new byte[5]).put("payload2", new byte[5]));
+            producer.buffer(producer.builder().position("b").put("payload1", new byte[3]).put("payload2", new byte[3]));
+            producer.buffer(producer.builder().position("c").put("payload1", new byte[7]).put("payload2", new byte[7]));
+            producer.buffer(producer.builder().position("d").put("payload1", new byte[7]).put("payload2", new byte[7]));
             producer.publish("a", "b", "c", "d");
         }
         try (RawdataConsumer consumer = client.consumer("the-topic", "d")) {
@@ -266,19 +272,19 @@ public class PostgresRawdataClientTest {
         long timestampBeforeD;
         long timestampAfterD;
         try (RawdataProducer producer = client.producer("the-topic")) {
-            producer.buffer(producer.builder().position("a").put("payload", new byte[5]));
+            producer.buffer(producer.builder().position("a").put("payload1", new byte[5]).put("payload2", new byte[5]));
             timestampBeforeA = System.currentTimeMillis();
             producer.publish("a");
             Thread.sleep(5);
-            producer.buffer(producer.builder().position("b").put("payload", new byte[3]));
+            producer.buffer(producer.builder().position("b").put("payload1", new byte[3]).put("payload2", new byte[3]));
             timestampBeforeB = System.currentTimeMillis();
             producer.publish("b");
             Thread.sleep(5);
-            producer.buffer(producer.builder().position("c").put("payload", new byte[7]));
+            producer.buffer(producer.builder().position("c").put("payload1", new byte[7]).put("payload2", new byte[7]));
             timestampBeforeC = System.currentTimeMillis();
             producer.publish("c");
             Thread.sleep(5);
-            producer.buffer(producer.builder().position("d").put("payload", new byte[7]));
+            producer.buffer(producer.builder().position("d").put("payload1", new byte[7]).put("payload2", new byte[7]));
             timestampBeforeD = System.currentTimeMillis();
             producer.publish("d");
             Thread.sleep(5);
@@ -297,5 +303,4 @@ public class PostgresRawdataClientTest {
             assertEquals("a", consumer.receive(100, TimeUnit.MILLISECONDS).position());
         }
     }
-
 }

@@ -46,9 +46,10 @@ class PostgresRawdataClient implements RawdataClient {
     }
 
     @Override
-    public RawdataConsumer consumer(String topic, ULID.Value initialPosition) {
+    public RawdataConsumer consumer(String topic, ULID.Value initialPosition, boolean inclusive) {
         createTopicIfNotExists(topic);
-        PostgresRawdataConsumer consumer = new PostgresRawdataConsumer(transactionFactory, topic, initialPosition, consumerPrefetchSize, dbPrefetchPollIntervalWhenEmptyMilliseconds);
+        PostgresCursor initialCursor = initialPosition == null ? null : new PostgresCursor(initialPosition, inclusive);
+        PostgresRawdataConsumer consumer = new PostgresRawdataConsumer(transactionFactory, topic, initialCursor, consumerPrefetchSize, dbPrefetchPollIntervalWhenEmptyMilliseconds);
         consumers.add(consumer);
         return consumer;
     }

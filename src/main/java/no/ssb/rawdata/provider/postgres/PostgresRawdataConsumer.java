@@ -30,7 +30,7 @@ class PostgresRawdataConsumer implements RawdataConsumer {
 
     final TransactionFactory transactionFactory;
     final String topic;
-    final AtomicReference<ULID.Value> position = new AtomicReference<>();
+    final AtomicReference<PostgresCursor> position = new AtomicReference<>();
     final AtomicBoolean closed = new AtomicBoolean(false);
     final Lock pollLock = new ReentrantLock();
     final Condition condition = pollLock.newCondition();
@@ -39,15 +39,15 @@ class PostgresRawdataConsumer implements RawdataConsumer {
     final AtomicReference<Long> pendingPrefetchExpiry = new AtomicReference<>(System.currentTimeMillis());
     final int prefetchSize;
 
-    PostgresRawdataConsumer(TransactionFactory transactionFactory, String topic, ULID.Value initialPosition, int prefetchSize, int dbPrefetchPollIntervalWhenEmptyMilliseconds) {
+    PostgresRawdataConsumer(TransactionFactory transactionFactory, String topic, PostgresCursor initialCursor, int prefetchSize, int dbPrefetchPollIntervalWhenEmptyMilliseconds) {
         this.transactionFactory = transactionFactory;
         this.prefetchSize = prefetchSize;
         this.dbPrefetchPollIntervalWhenEmptyMilliseconds = dbPrefetchPollIntervalWhenEmptyMilliseconds;
         this.topic = topic;
-        if (initialPosition == null) {
-            initialPosition = RawdataConsumer.beginningOfTime();
+        if (initialCursor == null) {
+            initialCursor = new PostgresCursor(RawdataConsumer.beginningOfTime(), true);
         }
-        position.set(initialPosition);
+        position.set(initialCursor);
     }
 
     @Override
@@ -78,15 +78,16 @@ class PostgresRawdataConsumer implements RawdataConsumer {
     private CompletableFuture<Integer> fetchNextBatchAsync(CountDownLatch cdl) {
         return transactionFactory.runAsyncInIsolatedTransaction(tx -> {
             try {
+                PostgresCursor cursor = position.get();
                 String sql = String.format(
                         "SELECT c.name, c.data, p.ulid, p.opaque_id " +
-                                "FROM (SELECT ulid, opaque_id FROM \"%s_positions\" WHERE ulid > ? ORDER BY ulid LIMIT ?) p " +
+                                "FROM (SELECT ulid, opaque_id FROM \"%s_positions\" WHERE ulid %s ? ORDER BY ulid LIMIT ?) p " +
                                 "LEFT JOIN \"%s_content\" c ON c.position_fk_ulid = p.ulid " +
                                 "ORDER BY p.ulid, c.name",
-                        topic, topic
+                        topic, cursor.inclusive ? ">=" : ">", topic
                 );
                 PreparedStatement ps = tx.connection().prepareStatement(sql);
-                UUID currentUuid = new UUID(position.get().getMostSignificantBits(), position.get().getLeastSignificantBits());
+                UUID currentUuid = new UUID(cursor.startKey.getMostSignificantBits(), cursor.startKey.getLeastSignificantBits());
                 ps.setObject(1, currentUuid);
                 ps.setInt(2, prefetchSize);
                 ResultSet rs = ps.executeQuery();
@@ -121,7 +122,7 @@ class PostgresRawdataConsumer implements RawdataConsumer {
                     messageBuffer.add(prevMessage = new PostgresRawdataMessage(prevUlid, prevOpaqueId, contentMap));
                 }
                 if (prevMessage != null) {
-                    position.set(prevMessage.ulid());
+                    position.set(new PostgresCursor(prevMessage.ulid(), false));
                 }
                 return i;
             } catch (SQLException e) {
@@ -176,9 +177,8 @@ class PostgresRawdataConsumer implements RawdataConsumer {
             throw new RuntimeException("Concurrent access between calls to receive and seek not allowed");
         }
         try {
-            ULID.Value ulid = RawdataConsumer.beginningOfTime(timestamp);
-            // String uuid = new UUID(ulid.getMostSignificantBits(), ulid.getLeastSignificantBits()).toString(); // for debugging
-            position.set(ulid);
+            ULID.Value ulid = RawdataConsumer.beginningOf(timestamp);
+            position.set(new PostgresCursor(ulid, true));
             pendingPrefetch.get().join();
             messageBuffer.clear();
             pendingPrefetchExpiry.set(System.currentTimeMillis());
