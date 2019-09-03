@@ -15,6 +15,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -60,7 +61,7 @@ class PostgresRawdataClient implements RawdataClient {
     }
 
     @Override
-    public RawdataCursor cursorOf(String topic, String position, boolean inclusive) {
+    public RawdataCursor cursorOf(String topic, String position, boolean inclusive, long approxTimestamp, Duration tolerance) {
         try (Transaction tx = transactionFactory.createTransaction(true)) {
             PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT ulid FROM \"%s_positions\" WHERE opaque_id = ?", topic));
             ps.setString(1, position);

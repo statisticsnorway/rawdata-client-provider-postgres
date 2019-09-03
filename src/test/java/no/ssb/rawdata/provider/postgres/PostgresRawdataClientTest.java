@@ -13,6 +13,7 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -209,7 +210,7 @@ public class PostgresRawdataClientTest {
             producer.buffer(producer.builder().position("d").put("payload1", new byte[7]).put("payload2", new byte[7]));
             producer.publish("a", "b", "c", "d");
         }
-        try (RawdataConsumer consumer = client.consumer("the-topic", "a")) {
+        try (RawdataConsumer consumer = client.consumer("the-topic", "a", System.currentTimeMillis(), Duration.ofMinutes(1))) {
             RawdataMessage message = consumer.receive(1, TimeUnit.SECONDS);
             assertEquals(message.position(), "b");
         }
@@ -224,11 +225,11 @@ public class PostgresRawdataClientTest {
             producer.buffer(producer.builder().position("d").put("payload1", new byte[7]).put("payload2", new byte[7]));
             producer.publish("a", "b", "c", "d");
         }
-        try (RawdataConsumer consumer = client.consumer("the-topic", "b")) {
+        try (RawdataConsumer consumer = client.consumer("the-topic", "b", System.currentTimeMillis(), Duration.ofMinutes(1))) {
             RawdataMessage message = consumer.receive(1, TimeUnit.SECONDS);
             assertEquals(message.position(), "c");
         }
-        try (RawdataConsumer consumer = client.consumer("the-topic", "c", true)) {
+        try (RawdataConsumer consumer = client.consumer("the-topic", "c", true, System.currentTimeMillis(), Duration.ofMinutes(1))) {
             RawdataMessage message = consumer.receive(1, TimeUnit.SECONDS);
             assertEquals(message.position(), "c");
         }
@@ -243,7 +244,7 @@ public class PostgresRawdataClientTest {
             producer.buffer(producer.builder().position("d").put("payload1", new byte[7]).put("payload2", new byte[7]));
             producer.publish("a", "b", "c", "d");
         }
-        try (RawdataConsumer consumer = client.consumer("the-topic", "c")) {
+        try (RawdataConsumer consumer = client.consumer("the-topic", "c", System.currentTimeMillis(), Duration.ofMinutes(1))) {
             RawdataMessage message = consumer.receive(1, TimeUnit.SECONDS);
             assertEquals(message.position(), "d");
         }
@@ -258,7 +259,7 @@ public class PostgresRawdataClientTest {
             producer.buffer(producer.builder().position("d").put("payload1", new byte[7]).put("payload2", new byte[7]));
             producer.publish("a", "b", "c", "d");
         }
-        try (RawdataConsumer consumer = client.consumer("the-topic", "d")) {
+        try (RawdataConsumer consumer = client.consumer("the-topic", "d", System.currentTimeMillis(), Duration.ofMinutes(1))) {
             RawdataMessage message = consumer.receive(100, TimeUnit.MILLISECONDS);
             assertNull(message);
         }
