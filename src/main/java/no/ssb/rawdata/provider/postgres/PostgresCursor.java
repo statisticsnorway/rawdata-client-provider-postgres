@@ -1,10 +1,11 @@
 package no.ssb.rawdata.provider.postgres;
 
 import de.huxhorn.sulky.ulid.ULID;
+import no.ssb.rawdata.api.RawdataCursor;
 
 import java.util.Objects;
 
-public class PostgresCursor {
+public class PostgresCursor implements RawdataCursor {
 
     /**
      * Need not exactly match an existing ulid-value.

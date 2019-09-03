@@ -4,6 +4,7 @@ import de.huxhorn.sulky.ulid.ULID;
 import no.ssb.rawdata.api.RawdataClient;
 import no.ssb.rawdata.api.RawdataClosedException;
 import no.ssb.rawdata.api.RawdataConsumer;
+import no.ssb.rawdata.api.RawdataCursor;
 import no.ssb.rawdata.api.RawdataMessage;
 import no.ssb.rawdata.api.RawdataProducer;
 import no.ssb.rawdata.provider.postgres.tx.Transaction;
@@ -46,12 +47,33 @@ class PostgresRawdataClient implements RawdataClient {
     }
 
     @Override
-    public RawdataConsumer consumer(String topic, ULID.Value initialPosition, boolean inclusive) {
+    public RawdataConsumer consumer(String topic, RawdataCursor cursor) {
         createTopicIfNotExists(topic);
-        PostgresCursor initialCursor = initialPosition == null ? null : new PostgresCursor(initialPosition, inclusive);
-        PostgresRawdataConsumer consumer = new PostgresRawdataConsumer(transactionFactory, topic, initialCursor, consumerPrefetchSize, dbPrefetchPollIntervalWhenEmptyMilliseconds);
+        PostgresRawdataConsumer consumer = new PostgresRawdataConsumer(transactionFactory, topic, (PostgresCursor) cursor, consumerPrefetchSize, dbPrefetchPollIntervalWhenEmptyMilliseconds);
         consumers.add(consumer);
         return consumer;
+    }
+
+    @Override
+    public RawdataCursor cursorOf(String topic, ULID.Value ulid, boolean inclusive) {
+        return new PostgresCursor(ulid, inclusive);
+    }
+
+    @Override
+    public RawdataCursor cursorOf(String topic, String position, boolean inclusive) {
+        try (Transaction tx = transactionFactory.createTransaction(true)) {
+            PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT ulid FROM \"%s_positions\" WHERE opaque_id = ?", topic));
+            ps.setString(1, position);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                UUID uuid = (UUID) rs.getObject(1);
+                ULID.Value ulid = new ULID.Value(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
+                return new PostgresCursor(ulid, inclusive);
+            }
+            return null;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -84,23 +106,6 @@ class PostgresRawdataClient implements RawdataClient {
             return new PostgresRawdataMessage(ulid, opaqueId, contentMap);
         } catch (SQLException e) {
             throw new PersistenceException(e);
-        }
-    }
-
-    @Override
-    public ULID.Value ulidOfPosition(String topic, String position) {
-        try (Transaction tx = transactionFactory.createTransaction(true)) {
-            PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT ulid FROM \"%s_positions\" WHERE opaque_id = ?", topic));
-            ps.setString(1, position);
-            ResultSet rs = ps.executeQuery();
-            if (rs.next()) {
-                UUID uuid = (UUID) rs.getObject(1);
-                ULID.Value ulid = new ULID.Value(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
-                return ulid;
-            }
-            return null;
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
         }
     }
 
