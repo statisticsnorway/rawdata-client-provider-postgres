@@ -6,6 +6,7 @@ import no.ssb.rawdata.api.RawdataClosedException;
 import no.ssb.rawdata.api.RawdataConsumer;
 import no.ssb.rawdata.api.RawdataCursor;
 import no.ssb.rawdata.api.RawdataMessage;
+import no.ssb.rawdata.api.RawdataNoSuchPositionException;
 import no.ssb.rawdata.api.RawdataProducer;
 import no.ssb.rawdata.provider.postgres.tx.Transaction;
 import no.ssb.rawdata.provider.postgres.tx.TransactionFactory;
@@ -62,16 +63,23 @@ class PostgresRawdataClient implements RawdataClient {
 
     @Override
     public RawdataCursor cursorOf(String topic, String position, boolean inclusive, long approxTimestamp, Duration tolerance) {
+        ULID.Value lowerUlid = RawdataConsumer.beginningOf(approxTimestamp - tolerance.toMillis());
+        ULID.Value upperUlid = RawdataConsumer.beginningOf(approxTimestamp + tolerance.toMillis());
+        UUID lowerBound = new UUID(lowerUlid.getMostSignificantBits(), lowerUlid.getLeastSignificantBits());
+        UUID upperBound = new UUID(upperUlid.getMostSignificantBits(), upperUlid.getLeastSignificantBits());
+
         try (Transaction tx = transactionFactory.createTransaction(true)) {
-            PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT ulid FROM \"%s_positions\" WHERE position = ?", topic));
+            PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT ulid FROM \"%s_positions\" WHERE position = ? AND ? <= ulid AND ulid < ?", topic));
             ps.setString(1, position);
+            ps.setObject(2, lowerBound);
+            ps.setObject(3, upperBound);
             ResultSet rs = ps.executeQuery();
             if (rs.next()) {
                 UUID uuid = (UUID) rs.getObject(1);
                 ULID.Value ulid = new ULID.Value(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
                 return new PostgresCursor(ulid, inclusive);
             }
-            return null;
+            throw new RawdataNoSuchPositionException("Position not found: " + position);
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
