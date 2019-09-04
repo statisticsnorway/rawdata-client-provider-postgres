@@ -58,21 +58,21 @@ class PostgresRawdataProducer implements RawdataProducer {
 
     @Override
     public void publish(String... positions) throws RawdataClosedException, RawdataNotBufferedException {
-        for (String opaqueId : positions) {
-            if (!buffer.containsKey(opaqueId)) {
-                throw new RawdataNotBufferedException(String.format("opaqueId %s is not in buffer", opaqueId));
+        for (String position : positions) {
+            if (!buffer.containsKey(position)) {
+                throw new RawdataNotBufferedException(String.format("position %s is not in buffer", position));
             }
         }
 
         try (Transaction tx = transactionFactory.createTransaction(false)) {
 
-            PreparedStatement positionUpdate = tx.connection().prepareStatement(String.format("INSERT INTO \"%s_positions\" (ulid, opaque_id, ts) VALUES (?, ?, ?)", topic));
+            PreparedStatement positionUpdate = tx.connection().prepareStatement(String.format("INSERT INTO \"%s_positions\" (ulid, position, ts) VALUES (?, ?, ?)", topic));
 
-            PreparedStatement contentUpdate = tx.connection().prepareStatement(String.format("INSERT INTO \"%s_content\" (position_fk_ulid, name, data) VALUES (?, ?, ?)", topic));
+            PreparedStatement contentUpdate = tx.connection().prepareStatement(String.format("INSERT INTO \"%s_content\" (ulid, name, data) VALUES (?, ?, ?)", topic));
 
-            for (String opaqueId : positions) {
+            for (String position : positions) {
 
-                PostgresRawdataMessage.Builder builder = buffer.get(opaqueId);
+                PostgresRawdataMessage.Builder builder = buffer.get(position);
 
                 ULID.Value id = getOrGenerateNextUlid(builder);
                 UUID uuid = new UUID(id.getMostSignificantBits(), id.getLeastSignificantBits());
@@ -81,7 +81,7 @@ class PostgresRawdataProducer implements RawdataProducer {
                  * position
                  */
                 positionUpdate.setObject(1, uuid);
-                positionUpdate.setString(2, opaqueId);
+                positionUpdate.setString(2, position);
                 positionUpdate.setTimestamp(3, Timestamp.from(new Date(id.timestamp()).toInstant()));
                 positionUpdate.addBatch();
 
@@ -106,8 +106,8 @@ class PostgresRawdataProducer implements RawdataProducer {
         }
 
         // remove from buffer after successful database transaction
-        for (String opaqueId : positions) {
-            buffer.remove(opaqueId);
+        for (String position : positions) {
+            buffer.remove(position);
         }
     }
 

@@ -80,9 +80,9 @@ class PostgresRawdataConsumer implements RawdataConsumer {
             try {
                 PostgresCursor cursor = position.get();
                 String sql = String.format(
-                        "SELECT c.name, c.data, p.ulid, p.opaque_id " +
-                                "FROM (SELECT ulid, opaque_id FROM \"%s_positions\" WHERE ulid %s ? ORDER BY ulid LIMIT ?) p " +
-                                "LEFT JOIN \"%s_content\" c ON c.position_fk_ulid = p.ulid " +
+                        "SELECT c.name, c.data, p.ulid, p.position " +
+                                "FROM (SELECT ulid, position FROM \"%s_positions\" WHERE ulid %s ? ORDER BY ulid LIMIT ?) p " +
+                                "LEFT JOIN \"%s_content\" c ON c.ulid = p.ulid " +
                                 "ORDER BY p.ulid, c.name",
                         topic, cursor.inclusive ? ">=" : ">", topic
                 );
@@ -93,21 +93,21 @@ class PostgresRawdataConsumer implements RawdataConsumer {
                 ResultSet rs = ps.executeQuery();
                 PostgresRawdataMessage prevMessage = null;
                 ULID.Value prevUlid = null;
-                String prevOpaqueId = null;
+                String prevPosition = null;
                 Map<String, byte[]> contentMap = new LinkedHashMap<>();
                 int i = 0;
                 while (rs.next()) {
                     String name = rs.getString(1);
                     byte[] data = rs.getBytes(2);
                     UUID uuid = (UUID) rs.getObject(3);
-                    String opaqueId = rs.getString(4);
+                    String position = rs.getString(4);
                     ULID.Value ulid = new ULID.Value(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
                     if (prevUlid == null) {
                         prevUlid = ulid;
-                        prevOpaqueId = opaqueId;
+                        prevPosition = position;
                     }
                     if (!ulid.equals(prevUlid)) {
-                        messageBuffer.add(prevMessage = new PostgresRawdataMessage(prevUlid, prevOpaqueId, contentMap));
+                        messageBuffer.add(prevMessage = new PostgresRawdataMessage(prevUlid, prevPosition, contentMap));
                         if (i++ == 0) {
                             cdl.countDown(); // early signal that at least one message is available.
                         }
@@ -115,11 +115,11 @@ class PostgresRawdataConsumer implements RawdataConsumer {
                     }
                     contentMap.put(name, data);
                     prevUlid = ulid;
-                    prevOpaqueId = opaqueId;
+                    prevPosition = position;
                 }
                 if (prevUlid != null) {
                     i++;
-                    messageBuffer.add(prevMessage = new PostgresRawdataMessage(prevUlid, prevOpaqueId, contentMap));
+                    messageBuffer.add(prevMessage = new PostgresRawdataMessage(prevUlid, prevPosition, contentMap));
                 }
                 if (prevMessage != null) {
                     position.set(new PostgresCursor(prevMessage.ulid(), false));
