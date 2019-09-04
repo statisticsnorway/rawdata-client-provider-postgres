@@ -1,7 +1,6 @@
 package no.ssb.rawdata.provider.postgres;
 
 import no.ssb.rawdata.provider.postgres.tx.Transaction;
-import no.ssb.rawdata.provider.postgres.tx.TransactionStatistics;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -10,7 +9,6 @@ import java.util.concurrent.CompletableFuture;
 class H2Transaction implements Transaction {
 
     final Connection connection;
-    final TransactionStatistics statistics = new TransactionStatistics();
 
     public H2Transaction(Connection connection) throws SQLException {
         this.connection = connection;
@@ -23,9 +21,9 @@ class H2Transaction implements Transaction {
     }
 
     @Override
-    public CompletableFuture<TransactionStatistics> commit() throws PersistenceException {
+    public CompletableFuture<Void> commit() throws PersistenceException {
         try {
-            return CompletableFuture.completedFuture(statistics);
+            return CompletableFuture.completedFuture(null);
         } finally {
             try {
                 connection.commit();
@@ -43,9 +41,9 @@ class H2Transaction implements Transaction {
     }
 
     @Override
-    public CompletableFuture<TransactionStatistics> cancel() {
+    public CompletableFuture<Void> cancel() {
         try {
-            return CompletableFuture.completedFuture(statistics);
+            return CompletableFuture.completedFuture(null);
         } finally {
             try {
                 connection.rollback();

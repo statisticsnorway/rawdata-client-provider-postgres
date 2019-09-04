@@ -7,9 +7,9 @@ public interface Transaction extends AutoCloseable {
 
     Connection connection();
 
-    CompletableFuture<TransactionStatistics> commit();
+    CompletableFuture<Void> commit();
 
-    CompletableFuture<TransactionStatistics> cancel();
+    CompletableFuture<Void> cancel();
 
     @Override
     default void close() {
