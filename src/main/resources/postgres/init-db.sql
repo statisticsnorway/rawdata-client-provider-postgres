@@ -6,8 +6,7 @@ CREATE TABLE "TOPIC_positions"
     ulid     uuid                     NOT NULL,
     position varchar                  NOT NULL,
     ts       timestamp with time zone NOT NULL,
-    PRIMARY KEY (ulid),
-    UNIQUE (position)
+    PRIMARY KEY (ulid)
 );
 
 CREATE TABLE "TOPIC_content"
