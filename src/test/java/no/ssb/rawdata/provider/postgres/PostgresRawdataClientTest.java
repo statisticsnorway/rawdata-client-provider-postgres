@@ -297,13 +297,13 @@ public class PostgresRawdataClientTest {
             consumer.seek(timestampAfterD);
             assertNull(consumer.receive(100, TimeUnit.MILLISECONDS));
             consumer.seek(timestampBeforeD);
-            assertEquals("d", consumer.receive(100, TimeUnit.MILLISECONDS).position());
+            assertEquals(consumer.receive(100, TimeUnit.MILLISECONDS).position(), "d");
             consumer.seek(timestampBeforeB);
-            assertEquals("b", consumer.receive(100, TimeUnit.MILLISECONDS).position());
+            assertEquals(consumer.receive(100, TimeUnit.MILLISECONDS).position(), "b");
             consumer.seek(timestampBeforeC);
-            assertEquals("c", consumer.receive(100, TimeUnit.MILLISECONDS).position());
+            assertEquals(consumer.receive(100, TimeUnit.MILLISECONDS).position(), "c");
             consumer.seek(timestampBeforeA);
-            assertEquals("a", consumer.receive(100, TimeUnit.MILLISECONDS).position());
+            assertEquals(consumer.receive(100, TimeUnit.MILLISECONDS).position(), "a");
         }
     }
 
