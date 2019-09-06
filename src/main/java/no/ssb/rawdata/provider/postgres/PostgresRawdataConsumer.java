@@ -80,8 +80,8 @@ class PostgresRawdataConsumer implements RawdataConsumer {
             try {
                 PostgresCursor cursor = position.get();
                 String sql = String.format(
-                        "SELECT c.name, c.data, p.ulid, p.position " +
-                                "FROM (SELECT ulid, position FROM \"%s_positions\" WHERE ulid %s ? ORDER BY ulid LIMIT ?) p " +
+                        "SELECT c.name, c.data, p.ulid, p.position, p.ordering_group, p.sequence_number " +
+                                "FROM (SELECT ulid, ordering_group, sequence_number, position FROM \"%s_positions\" WHERE ulid %s ? ORDER BY ulid LIMIT ?) p " +
                                 "LEFT JOIN \"%s_content\" c ON c.ulid = p.ulid " +
                                 "ORDER BY p.ulid, c.name",
                         topic, cursor.inclusive ? ">=" : ">", topic
@@ -93,6 +93,8 @@ class PostgresRawdataConsumer implements RawdataConsumer {
                 ResultSet rs = ps.executeQuery();
                 PostgresRawdataMessage prevMessage = null;
                 ULID.Value prevUlid = null;
+                String prevOrderingGroup = null;
+                long prevSequence = 0;
                 String prevPosition = null;
                 Map<String, byte[]> contentMap = new LinkedHashMap<>();
                 int i = 0;
@@ -101,13 +103,17 @@ class PostgresRawdataConsumer implements RawdataConsumer {
                     byte[] data = rs.getBytes(2);
                     UUID uuid = (UUID) rs.getObject(3);
                     String position = rs.getString(4);
+                    String orderingGroup = rs.getString(5);
+                    long sequence = rs.getLong(6);
                     ULID.Value ulid = new ULID.Value(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
                     if (prevUlid == null) {
                         prevUlid = ulid;
                         prevPosition = position;
+                        prevOrderingGroup = orderingGroup;
+                        prevSequence = sequence;
                     }
                     if (!ulid.equals(prevUlid)) {
-                        messageBuffer.add(prevMessage = new PostgresRawdataMessage(prevUlid, prevPosition, contentMap));
+                        messageBuffer.add(prevMessage = new PostgresRawdataMessage(prevUlid, prevOrderingGroup, prevSequence, prevPosition, contentMap));
                         if (i++ == 0) {
                             cdl.countDown(); // early signal that at least one message is available.
                         }
@@ -116,10 +122,12 @@ class PostgresRawdataConsumer implements RawdataConsumer {
                     contentMap.put(name, data);
                     prevUlid = ulid;
                     prevPosition = position;
+                    prevOrderingGroup = orderingGroup;
+                    prevSequence = sequence;
                 }
                 if (prevUlid != null) {
                     i++;
-                    messageBuffer.add(prevMessage = new PostgresRawdataMessage(prevUlid, prevPosition, contentMap));
+                    messageBuffer.add(prevMessage = new PostgresRawdataMessage(prevUlid, prevOrderingGroup, prevSequence, prevPosition, contentMap));
                 }
                 if (prevMessage != null) {
                     position.set(new PostgresCursor(prevMessage.ulid(), false));

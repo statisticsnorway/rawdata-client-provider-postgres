@@ -3,9 +3,11 @@ DROP TABLE IF EXISTS "TOPIC_positions";
 
 CREATE TABLE "TOPIC_positions"
 (
-    ulid     uuid                     NOT NULL,
-    position varchar                  NOT NULL,
-    ts       timestamp with time zone NOT NULL,
+    ulid            uuid                     NOT NULL,
+    ordering_group  varchar                      NULL,
+    sequence_number bigint                   NOT NULL,
+    position        varchar                  NOT NULL,
+    ts              timestamp with time zone NOT NULL,
     PRIMARY KEY (ulid)
 );
 

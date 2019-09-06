@@ -92,11 +92,13 @@ class PostgresRawdataClient implements RawdataClient {
         }
         try (Transaction tx = transactionFactory.createTransaction(true)) {
             ULID.Value ulid = null;
+            String orderingGroup = null;
+            long sequence = 0;
             String position = null;
             Map<String, byte[]> contentMap = new LinkedHashMap<>();
             String sql = String.format(
-                    "SELECT p.ulid, p.position, c.name, c.data " +
-                            "FROM (SELECT ulid, position FROM \"%s_positions\" ORDER BY ulid DESC LIMIT 1) p " +
+                    "SELECT p.ulid, p.ordering_group, p.sequence_number, p.position, c.name, c.data " +
+                            "FROM (SELECT ulid, ordering_group, sequence_number, position FROM \"%s_positions\" ORDER BY ulid DESC LIMIT 1) p " +
                             "LEFT JOIN \"%s_content\" c ON p.ulid = c.ulid",
                     topic, topic);
             PreparedStatement ps = tx.connection().prepareStatement(sql);
@@ -104,15 +106,17 @@ class PostgresRawdataClient implements RawdataClient {
             while (rs.next()) {
                 UUID uuid = (UUID) rs.getObject(1);
                 ulid = new ULID.Value(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
-                position = rs.getString(2);
-                String name = rs.getString(3);
-                byte[] data = rs.getBytes(4);
+                orderingGroup = rs.getString(2);
+                sequence = rs.getLong(3);
+                position = rs.getString(4);
+                String name = rs.getString(5);
+                byte[] data = rs.getBytes(6);
                 contentMap.put(name, data);
             }
             if (ulid == null) {
                 return null;
             }
-            return new PostgresRawdataMessage(ulid, position, contentMap);
+            return new PostgresRawdataMessage(ulid, orderingGroup, sequence, position, contentMap);
         } catch (SQLException e) {
             throw new PersistenceException(e);
         }

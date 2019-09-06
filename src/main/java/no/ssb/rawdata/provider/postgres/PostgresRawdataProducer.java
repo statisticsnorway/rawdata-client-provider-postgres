@@ -66,7 +66,7 @@ class PostgresRawdataProducer implements RawdataProducer {
 
         try (Transaction tx = transactionFactory.createTransaction(false)) {
 
-            PreparedStatement positionUpdate = tx.connection().prepareStatement(String.format("INSERT INTO \"%s_positions\" (ulid, position, ts) VALUES (?, ?, ?)", topic));
+            PreparedStatement positionUpdate = tx.connection().prepareStatement(String.format("INSERT INTO \"%s_positions\" (ulid, ordering_group, sequence_number, position, ts) VALUES (?, ?, ?, ?, ?)", topic));
 
             PreparedStatement contentUpdate = tx.connection().prepareStatement(String.format("INSERT INTO \"%s_content\" (ulid, name, data) VALUES (?, ?, ?)", topic));
 
@@ -81,8 +81,10 @@ class PostgresRawdataProducer implements RawdataProducer {
                  * position
                  */
                 positionUpdate.setObject(1, uuid);
-                positionUpdate.setString(2, position);
-                positionUpdate.setTimestamp(3, Timestamp.from(new Date(id.timestamp()).toInstant()));
+                positionUpdate.setString(2, builder.orderingGroup);
+                positionUpdate.setLong(3, builder.sequenceNumber);
+                positionUpdate.setString(4, position);
+                positionUpdate.setTimestamp(5, Timestamp.from(new Date(id.timestamp()).toInstant()));
                 positionUpdate.addBatch();
 
                 /*
