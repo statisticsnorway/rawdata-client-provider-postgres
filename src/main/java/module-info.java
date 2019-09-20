@@ -12,8 +12,7 @@ module no.ssb.rawdata.postgres {
     requires no.ssb.rawdata.api;
     requires no.ssb.service.provider.api;
 
+    opens no.ssb.rawdata.provider.postgres.init;
+
     provides RawdataClientInitializer with PostgresRawdataClientInitializer;
-
-    opens postgres;
-
 }

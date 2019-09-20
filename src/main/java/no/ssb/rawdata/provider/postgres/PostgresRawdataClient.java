@@ -150,7 +150,7 @@ class PostgresRawdataClient implements RawdataClient {
 
     void dropOrCreateDatabase(String topic) {
         try {
-            String initSQL = FileAndClasspathReaderUtils.readFileOrClasspathResource("no/ssb/rawdata/provider/postgres/init-db.sql");
+            String initSQL = FileAndClasspathReaderUtils.readFileOrClasspathResource("no/ssb/rawdata/provider/postgres/init/init-db.sql");
             Connection conn = transactionFactory.dataSource().getConnection();
             conn.beginRequest();
 
