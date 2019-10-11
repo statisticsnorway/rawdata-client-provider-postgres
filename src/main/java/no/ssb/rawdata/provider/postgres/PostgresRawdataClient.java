@@ -90,6 +90,7 @@ class PostgresRawdataClient implements RawdataClient {
         if (isClosed()) {
             throw new RawdataClosedException();
         }
+        createTopicIfNotExists(topic);
         try (Transaction tx = transactionFactory.createTransaction(true)) {
             ULID.Value ulid = null;
             String orderingGroup = null;
