@@ -3,18 +3,19 @@ version: '3.3'
 services:
 
   postgresdb:
-    image: postgres:11-alpine
+    image: postgres:12-alpine
     ports:
-    - 5432:5432
+      - 5432:5432
     environment:
       POSTGRES_PASSWORD: postgres
     volumes:
-    - rdcpostgres-test:/var/lib/postgresql-pp-test/data
+      - rdcpostgres-test:/var/lib/postgresql/data
+      - ./init-db-and-user.sql:/docker-entrypoint-initdb.d/init.sql
 
   adminer:
     image: adminer
     ports:
-    - 8080:8080
+      - 8080:8080
 
 volumes:
   rdcpostgres-test:
