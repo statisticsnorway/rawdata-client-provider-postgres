@@ -7,7 +7,7 @@ module no.ssb.rawdata.postgres {
     requires java.sql;
     requires de.huxhorn.sulky.ulid;
     requires com.zaxxer.hikari;
-    requires postgresql;
+    requires org.postgresql.jdbc;
     requires no.ssb.config;
     requires no.ssb.rawdata.api;
     requires no.ssb.service.provider.api;
