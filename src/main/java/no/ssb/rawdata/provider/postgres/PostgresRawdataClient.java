@@ -69,17 +69,19 @@ class PostgresRawdataClient implements RawdataClient {
         UUID upperBound = new UUID(upperUlid.getMostSignificantBits(), upperUlid.getLeastSignificantBits());
 
         try (Transaction tx = transactionFactory.createTransaction(true)) {
-            PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT ulid FROM \"%s_positions\" WHERE position = ? AND ? <= ulid AND ulid < ?", topic));
-            ps.setString(1, position);
-            ps.setObject(2, lowerBound);
-            ps.setObject(3, upperBound);
-            ResultSet rs = ps.executeQuery();
-            if (rs.next()) {
-                UUID uuid = (UUID) rs.getObject(1);
-                ULID.Value ulid = new ULID.Value(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
-                return new PostgresCursor(ulid, inclusive);
+            try (PreparedStatement ps = tx.connection().prepareStatement(String.format("SELECT ulid FROM \"%s_positions\" WHERE position = ? AND ? <= ulid AND ulid < ?", topic))) {
+                ps.setString(1, position);
+                ps.setObject(2, lowerBound);
+                ps.setObject(3, upperBound);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        UUID uuid = (UUID) rs.getObject(1);
+                        ULID.Value ulid = new ULID.Value(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
+                        return new PostgresCursor(ulid, inclusive);
+                    }
+                    throw new RawdataNoSuchPositionException("Position not found: " + position);
+                }
             }
-            throw new RawdataNoSuchPositionException("Position not found: " + position);
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -102,22 +104,24 @@ class PostgresRawdataClient implements RawdataClient {
                             "FROM (SELECT ulid, ordering_group, sequence_number, position FROM \"%s_positions\" ORDER BY ulid DESC LIMIT 1) p " +
                             "LEFT JOIN \"%s_content\" c ON p.ulid = c.ulid",
                     topic, topic);
-            PreparedStatement ps = tx.connection().prepareStatement(sql);
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) {
-                UUID uuid = (UUID) rs.getObject(1);
-                ulid = new ULID.Value(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
-                orderingGroup = rs.getString(2);
-                sequence = rs.getLong(3);
-                position = rs.getString(4);
-                String name = rs.getString(5);
-                byte[] data = rs.getBytes(6);
-                contentMap.put(name, data);
+            try (PreparedStatement ps = tx.connection().prepareStatement(sql)) {
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        UUID uuid = (UUID) rs.getObject(1);
+                        ulid = new ULID.Value(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
+                        orderingGroup = rs.getString(2);
+                        sequence = rs.getLong(3);
+                        position = rs.getString(4);
+                        String name = rs.getString(5);
+                        byte[] data = rs.getBytes(6);
+                        contentMap.put(name, data);
+                    }
+                    if (ulid == null) {
+                        return null;
+                    }
+                    return new PostgresRawdataMessage(ulid, orderingGroup, sequence, position, contentMap);
+                }
             }
-            if (ulid == null) {
-                return null;
-            }
-            return new PostgresRawdataMessage(ulid, orderingGroup, sequence, position, contentMap);
         } catch (SQLException e) {
             throw new PersistenceException(e);
         }
@@ -152,13 +156,12 @@ class PostgresRawdataClient implements RawdataClient {
     void dropOrCreateDatabase(String topic) {
         try {
             String initSQL = FileAndClasspathReaderUtils.readFileOrClasspathResource("no/ssb/rawdata/provider/postgres/init/init-db.sql");
-            Connection conn = transactionFactory.dataSource().getConnection();
-            conn.beginRequest();
+            try (Connection conn = transactionFactory.dataSource().getConnection()) {
+                conn.beginRequest();
 
-            try (Scanner s = new Scanner(initSQL.replaceAll("TOPIC", topic))) {
-                s.useDelimiter("(;(\r)?\n)|(--\n)");
-                try (Statement st = conn.createStatement()) {
-                    try {
+                try (Scanner s = new Scanner(initSQL.replaceAll("TOPIC", topic))) {
+                    s.useDelimiter("(;(\r)?\n)|(--\n)");
+                    try (Statement st = conn.createStatement()) {
                         while (s.hasNext()) {
                             String line = s.next();
                             if (line.startsWith("/*!") && line.endsWith("*/")) {
@@ -171,13 +174,11 @@ class PostgresRawdataClient implements RawdataClient {
                             }
                         }
                         conn.commit();
-                    } finally {
-                        st.close();
                     }
                 }
-            }
 
-            conn.endRequest();
+                conn.endRequest();
+            }
 
         } catch (SQLException e) {
             throw new RuntimeException(e);

@@ -86,53 +86,55 @@ class PostgresRawdataConsumer implements RawdataConsumer {
                                 "ORDER BY p.ulid, c.name",
                         topic, cursor.inclusive ? ">=" : ">", topic
                 );
-                PreparedStatement ps = tx.connection().prepareStatement(sql);
-                UUID currentUuid = new UUID(cursor.startKey.getMostSignificantBits(), cursor.startKey.getLeastSignificantBits());
-                ps.setObject(1, currentUuid);
-                ps.setInt(2, prefetchSize);
-                ResultSet rs = ps.executeQuery();
-                PostgresRawdataMessage prevMessage = null;
-                ULID.Value prevUlid = null;
-                String prevOrderingGroup = null;
-                long prevSequence = 0;
-                String prevPosition = null;
-                Map<String, byte[]> contentMap = new LinkedHashMap<>();
-                int i = 0;
-                while (rs.next()) {
-                    String name = rs.getString(1);
-                    byte[] data = rs.getBytes(2);
-                    UUID uuid = (UUID) rs.getObject(3);
-                    String position = rs.getString(4);
-                    String orderingGroup = rs.getString(5);
-                    long sequence = rs.getLong(6);
-                    ULID.Value ulid = new ULID.Value(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
-                    if (prevUlid == null) {
-                        prevUlid = ulid;
-                        prevPosition = position;
-                        prevOrderingGroup = orderingGroup;
-                        prevSequence = sequence;
-                    }
-                    if (!ulid.equals(prevUlid)) {
-                        messageBuffer.add(prevMessage = new PostgresRawdataMessage(prevUlid, prevOrderingGroup, prevSequence, prevPosition, contentMap));
-                        if (i++ == 0) {
-                            cdl.countDown(); // early signal that at least one message is available.
+                try (PreparedStatement ps = tx.connection().prepareStatement(sql)) {
+                    UUID currentUuid = new UUID(cursor.startKey.getMostSignificantBits(), cursor.startKey.getLeastSignificantBits());
+                    ps.setObject(1, currentUuid);
+                    ps.setInt(2, prefetchSize);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        PostgresRawdataMessage prevMessage = null;
+                        ULID.Value prevUlid = null;
+                        String prevOrderingGroup = null;
+                        long prevSequence = 0;
+                        String prevPosition = null;
+                        Map<String, byte[]> contentMap = new LinkedHashMap<>();
+                        int i = 0;
+                        while (rs.next()) {
+                            String name = rs.getString(1);
+                            byte[] data = rs.getBytes(2);
+                            UUID uuid = (UUID) rs.getObject(3);
+                            String position = rs.getString(4);
+                            String orderingGroup = rs.getString(5);
+                            long sequence = rs.getLong(6);
+                            ULID.Value ulid = new ULID.Value(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
+                            if (prevUlid == null) {
+                                prevUlid = ulid;
+                                prevPosition = position;
+                                prevOrderingGroup = orderingGroup;
+                                prevSequence = sequence;
+                            }
+                            if (!ulid.equals(prevUlid)) {
+                                messageBuffer.add(prevMessage = new PostgresRawdataMessage(prevUlid, prevOrderingGroup, prevSequence, prevPosition, contentMap));
+                                if (i++ == 0) {
+                                    cdl.countDown(); // early signal that at least one message is available.
+                                }
+                                contentMap = new LinkedHashMap<>();
+                            }
+                            contentMap.put(name, data);
+                            prevUlid = ulid;
+                            prevPosition = position;
+                            prevOrderingGroup = orderingGroup;
+                            prevSequence = sequence;
                         }
-                        contentMap = new LinkedHashMap<>();
+                        if (prevUlid != null) {
+                            i++;
+                            messageBuffer.add(prevMessage = new PostgresRawdataMessage(prevUlid, prevOrderingGroup, prevSequence, prevPosition, contentMap));
+                        }
+                        if (prevMessage != null) {
+                            position.set(new PostgresCursor(prevMessage.ulid(), false));
+                        }
+                        return i;
                     }
-                    contentMap.put(name, data);
-                    prevUlid = ulid;
-                    prevPosition = position;
-                    prevOrderingGroup = orderingGroup;
-                    prevSequence = sequence;
                 }
-                if (prevUlid != null) {
-                    i++;
-                    messageBuffer.add(prevMessage = new PostgresRawdataMessage(prevUlid, prevOrderingGroup, prevSequence, prevPosition, contentMap));
-                }
-                if (prevMessage != null) {
-                    position.set(new PostgresCursor(prevMessage.ulid(), false));
-                }
-                return i;
             } catch (SQLException e) {
                 throw new PersistenceException(e);
             } finally {
@@ -165,7 +167,6 @@ class PostgresRawdataConsumer implements RawdataConsumer {
         } finally {
             pollLock.unlock();
         }
-
     }
 
     @Override
