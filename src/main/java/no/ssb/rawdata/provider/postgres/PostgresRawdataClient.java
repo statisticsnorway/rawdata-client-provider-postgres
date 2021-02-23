@@ -130,13 +130,25 @@ class PostgresRawdataClient implements RawdataClient {
 
     void createTopicIfNotExists(String topic) {
         if (!transactionFactory.checkIfTableTopicExists(topic, "positions") || !transactionFactory.checkIfTableTopicExists(topic, "content")) {
-            dropOrCreateDatabase(topic);
+            dropOrCreateTopicTables(topic, "no/ssb/rawdata/provider/postgres/init/init-topic-stream.sql");
+        }
+    }
+
+    void createTopicMetadataIfNotExists(String topic) {
+        if (!transactionFactory.checkIfTableTopicExists(topic, "metadata")) {
+            dropOrCreateTopicTables(topic, "no/ssb/rawdata/provider/postgres/init/init-topic-metadata.sql");
         }
     }
 
     @Override
     public boolean isClosed() {
         return closed.get();
+    }
+
+    @Override
+    public PostgresRawdataMetadataClient metadata(String topic) {
+        createTopicMetadataIfNotExists(topic);
+        return new PostgresRawdataMetadataClient(topic, transactionFactory);
     }
 
     @Override
@@ -153,9 +165,9 @@ class PostgresRawdataClient implements RawdataClient {
         closed.set(true);
     }
 
-    void dropOrCreateDatabase(String topic) {
+    void dropOrCreateTopicTables(String topic, String sqlResource) {
         try {
-            String initSQL = FileAndClasspathReaderUtils.readFileOrClasspathResource("no/ssb/rawdata/provider/postgres/init/init-db.sql");
+            String initSQL = FileAndClasspathReaderUtils.readFileOrClasspathResource(sqlResource);
             try (Connection conn = transactionFactory.dataSource().getConnection()) {
                 conn.beginRequest();
 
