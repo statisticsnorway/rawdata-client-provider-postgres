@@ -153,6 +153,9 @@ class PostgresRawdataClient implements RawdataClient {
 
     @Override
     public void close() {
+        if (!closed.compareAndSet(false, true)) {
+            return; // already closed
+        }
         for (PostgresRawdataProducer producer : producers) {
             producer.close();
         }
@@ -162,7 +165,6 @@ class PostgresRawdataClient implements RawdataClient {
         }
         consumers.clear();
         transactionFactory.close();
-        closed.set(true);
     }
 
     void dropOrCreateTopicTables(String topic, String sqlResource) {
