@@ -34,7 +34,7 @@ class PostgresRawdataConsumer implements RawdataConsumer {
     final AtomicBoolean closed = new AtomicBoolean(false);
     final Lock pollLock = new ReentrantLock();
     final Condition condition = pollLock.newCondition();
-    final Deque<PostgresRawdataMessage> messageBuffer = new ConcurrentLinkedDeque<>();
+    final Deque<RawdataMessage> messageBuffer = new ConcurrentLinkedDeque<>();
     final AtomicReference<CompletableFuture<Integer>> pendingPrefetch = new AtomicReference<>(CompletableFuture.completedFuture(0));
     final AtomicReference<Long> pendingPrefetchExpiry = new AtomicReference<>(System.currentTimeMillis());
     final int prefetchSize;
@@ -55,7 +55,7 @@ class PostgresRawdataConsumer implements RawdataConsumer {
         return topic;
     }
 
-    PostgresRawdataMessage findNextMessage() {
+    RawdataMessage findNextMessage() {
         CountDownLatch latch = OPEN_LATCH;
         if (messageBuffer.size() < 1 + (prefetchSize / 2) && pendingPrefetch.get().isDone()
                 && (pendingPrefetch.get().join() > 0 || pendingPrefetchExpiry.get() <= System.currentTimeMillis())) {
@@ -91,7 +91,7 @@ class PostgresRawdataConsumer implements RawdataConsumer {
                     ps.setObject(1, currentUuid);
                     ps.setInt(2, prefetchSize);
                     try (ResultSet rs = ps.executeQuery()) {
-                        PostgresRawdataMessage prevMessage = null;
+                        RawdataMessage prevMessage = null;
                         ULID.Value prevUlid = null;
                         String prevOrderingGroup = null;
                         long prevSequence = 0;
@@ -113,7 +113,7 @@ class PostgresRawdataConsumer implements RawdataConsumer {
                                 prevSequence = sequence;
                             }
                             if (!ulid.equals(prevUlid)) {
-                                messageBuffer.add(prevMessage = new PostgresRawdataMessage(prevUlid, prevOrderingGroup, prevSequence, prevPosition, contentMap));
+                                messageBuffer.add(prevMessage = RawdataMessage.builder().ulid(prevUlid).orderingGroup(prevOrderingGroup).sequenceNumber(prevSequence).position(prevPosition).data(contentMap).build());
                                 if (i++ == 0) {
                                     cdl.countDown(); // early signal that at least one message is available.
                                 }
@@ -127,7 +127,7 @@ class PostgresRawdataConsumer implements RawdataConsumer {
                         }
                         if (prevUlid != null) {
                             i++;
-                            messageBuffer.add(prevMessage = new PostgresRawdataMessage(prevUlid, prevOrderingGroup, prevSequence, prevPosition, contentMap));
+                            messageBuffer.add(prevMessage = RawdataMessage.builder().ulid(prevUlid).orderingGroup(prevOrderingGroup).sequenceNumber(prevSequence).position(prevPosition).data(contentMap).build());
                         }
                         if (prevMessage != null) {
                             position.set(new PostgresCursor(prevMessage.ulid(), false));
@@ -144,7 +144,7 @@ class PostgresRawdataConsumer implements RawdataConsumer {
     }
 
     @Override
-    public PostgresRawdataMessage receive(int timeout, TimeUnit unit) throws InterruptedException {
+    public RawdataMessage receive(int timeout, TimeUnit unit) throws InterruptedException {
         int pollIntervalNanos = 250 * 1000 * 1000;
         if (isClosed()) {
             throw new RawdataClosedException();
@@ -154,7 +154,7 @@ class PostgresRawdataConsumer implements RawdataConsumer {
             throw new RuntimeException("Concurrent access between calls to receive and seek not allowed");
         }
         try {
-            PostgresRawdataMessage message = findNextMessage();
+            RawdataMessage message = findNextMessage();
             while (message == null) {
                 long durationNano = expireTimeNano - System.nanoTime();
                 if (durationNano <= 0) {

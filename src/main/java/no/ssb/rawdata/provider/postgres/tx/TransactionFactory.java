@@ -17,9 +17,13 @@ public interface TransactionFactory {
      * @return a completable future that will be signalled when the asynchronous work is complete.
      */
     default <T> CompletableFuture<T> runAsyncInIsolatedTransaction(Function<? super Transaction, ? extends T> retryable, boolean readOnly) {
+        RuntimeException callerStackException = new RuntimeException();
         return CompletableFuture.supplyAsync(() -> {
             try (Transaction tx = createTransaction(readOnly)) {
                 return retryable.apply(tx);
+            } catch (Throwable t) {
+                callerStackException.initCause(t);
+                throw callerStackException;
             }
         });
     }

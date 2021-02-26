@@ -23,7 +23,7 @@ class PostgresRawdataProducer implements RawdataProducer {
 
     private final TransactionFactory transactionFactory;
     private final String topic;
-    private final Map<String, PostgresRawdataMessage.Builder> buffer = new ConcurrentHashMap<>();
+    private final Map<String, RawdataMessage.Builder> buffer = new ConcurrentHashMap<>();
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final ULID ulid = new ULID();
     private final AtomicReference<ULID.Value> previousIdRef = new AtomicReference<>(ulid.nextValue());
@@ -43,16 +43,15 @@ class PostgresRawdataProducer implements RawdataProducer {
         if (isClosed()) {
             throw new RawdataClosedException();
         }
-        return new PostgresRawdataMessage.Builder();
+        return RawdataMessage.builder();
     }
 
     @Override
-    public RawdataProducer buffer(RawdataMessage.Builder _builder) throws RawdataClosedException {
+    public RawdataProducer buffer(RawdataMessage.Builder builder) throws RawdataClosedException {
         if (isClosed()) {
             throw new RawdataClosedException();
         }
-        PostgresRawdataMessage.Builder builder = (PostgresRawdataMessage.Builder) _builder;
-        buffer.put(builder.position, builder);
+        buffer.put(builder.position(), builder);
         return this;
     }
 
@@ -72,7 +71,7 @@ class PostgresRawdataProducer implements RawdataProducer {
 
                     for (String position : positions) {
 
-                        PostgresRawdataMessage.Builder builder = buffer.get(position);
+                        RawdataMessage.Builder builder = buffer.get(position);
 
                         ULID.Value id = getOrGenerateNextUlid(builder);
                         UUID uuid = new UUID(id.getMostSignificantBits(), id.getLeastSignificantBits());
@@ -81,8 +80,8 @@ class PostgresRawdataProducer implements RawdataProducer {
                          * position
                          */
                         positionUpdate.setObject(1, uuid);
-                        positionUpdate.setString(2, builder.orderingGroup);
-                        positionUpdate.setLong(3, builder.sequenceNumber);
+                        positionUpdate.setString(2, builder.orderingGroup());
+                        positionUpdate.setLong(3, builder.sequenceNumber());
                         positionUpdate.setString(4, position);
                         positionUpdate.setTimestamp(5, Timestamp.from(new Date(id.timestamp()).toInstant()));
                         positionUpdate.addBatch();
@@ -91,7 +90,7 @@ class PostgresRawdataProducer implements RawdataProducer {
                          * content
                          */
 
-                        for (Map.Entry<String, byte[]> entry : builder.data.entrySet()) {
+                        for (Map.Entry<String, byte[]> entry : builder.data().entrySet()) {
                             contentUpdate.setObject(1, uuid);
                             contentUpdate.setString(2, entry.getKey());
                             contentUpdate.setBytes(3, entry.getValue());
@@ -115,8 +114,8 @@ class PostgresRawdataProducer implements RawdataProducer {
         }
     }
 
-    private ULID.Value getOrGenerateNextUlid(PostgresRawdataMessage.Builder builder) {
-        ULID.Value id = builder.ulid;
+    private ULID.Value getOrGenerateNextUlid(RawdataMessage.Builder builder) {
+        ULID.Value id = builder.ulid();
         while (id == null) {
             ULID.Value previousUlid = previousIdRef.get();
             ULID.Value attemptedId = RawdataProducer.nextMonotonicUlid(this.ulid, previousUlid);

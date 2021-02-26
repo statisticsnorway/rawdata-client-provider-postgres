@@ -119,7 +119,13 @@ class PostgresRawdataClient implements RawdataClient {
                     if (ulid == null) {
                         return null;
                     }
-                    return new PostgresRawdataMessage(ulid, orderingGroup, sequence, position, contentMap);
+                    return RawdataMessage.builder()
+                            .ulid(ulid)
+                            .orderingGroup(orderingGroup)
+                            .sequenceNumber(sequence)
+                            .position(position)
+                            .data(contentMap)
+                            .build();
                 }
             }
         } catch (SQLException e) {
@@ -130,7 +136,13 @@ class PostgresRawdataClient implements RawdataClient {
 
     void createTopicIfNotExists(String topic) {
         if (!transactionFactory.checkIfTableTopicExists(topic, "positions") || !transactionFactory.checkIfTableTopicExists(topic, "content")) {
-            dropOrCreateDatabase(topic);
+            dropOrCreateTopicTables(topic, "no/ssb/rawdata/provider/postgres/init/init-topic-stream.sql");
+        }
+    }
+
+    void createTopicMetadataIfNotExists(String topic) {
+        if (!transactionFactory.checkIfTableTopicExists(topic, "metadata")) {
+            dropOrCreateTopicTables(topic, "no/ssb/rawdata/provider/postgres/init/init-topic-metadata.sql");
         }
     }
 
@@ -140,7 +152,16 @@ class PostgresRawdataClient implements RawdataClient {
     }
 
     @Override
+    public PostgresRawdataMetadataClient metadata(String topic) {
+        createTopicMetadataIfNotExists(topic);
+        return new PostgresRawdataMetadataClient(topic, transactionFactory);
+    }
+
+    @Override
     public void close() {
+        if (!closed.compareAndSet(false, true)) {
+            return; // already closed
+        }
         for (PostgresRawdataProducer producer : producers) {
             producer.close();
         }
@@ -150,12 +171,11 @@ class PostgresRawdataClient implements RawdataClient {
         }
         consumers.clear();
         transactionFactory.close();
-        closed.set(true);
     }
 
-    void dropOrCreateDatabase(String topic) {
+    void dropOrCreateTopicTables(String topic, String sqlResource) {
         try {
-            String initSQL = FileAndClasspathReaderUtils.readFileOrClasspathResource("no/ssb/rawdata/provider/postgres/init/init-db.sql");
+            String initSQL = FileAndClasspathReaderUtils.readFileOrClasspathResource(sqlResource);
             try (Connection conn = transactionFactory.dataSource().getConnection()) {
                 conn.beginRequest();
 

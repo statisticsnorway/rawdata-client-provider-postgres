@@ -46,7 +46,7 @@ public class PostgresUUIDOrderingTest {
     }
 
     private void dropTables(String topic) {
-        client.dropOrCreateDatabase(topic);
+        client.dropOrCreateTopicTables(topic, "no/ssb/rawdata/provider/postgres/init/init-topic-stream.sql");
     }
 
     @Test
