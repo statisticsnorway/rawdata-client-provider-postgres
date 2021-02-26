@@ -119,7 +119,13 @@ class PostgresRawdataClient implements RawdataClient {
                     if (ulid == null) {
                         return null;
                     }
-                    return new PostgresRawdataMessage(ulid, orderingGroup, sequence, position, contentMap);
+                    return RawdataMessage.builder()
+                            .ulid(ulid)
+                            .orderingGroup(orderingGroup)
+                            .sequenceNumber(sequence)
+                            .position(position)
+                            .data(contentMap)
+                            .build();
                 }
             }
         } catch (SQLException e) {
