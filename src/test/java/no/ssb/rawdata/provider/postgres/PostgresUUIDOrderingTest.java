@@ -74,10 +74,11 @@ public class PostgresUUIDOrderingTest {
         }
         long startProduce = System.currentTimeMillis();
         try (RawdataProducer producer = client.producer("T1")) {
+            List<RawdataMessage> messages = new ArrayList<>();
             for (String position : expectedPositions) {
-                producer.buffer(producer.builder().position(position).put("payload", new byte[8]));
+                messages.add(RawdataMessage.builder().position(position).put("payload", new byte[8]).build());
             }
-            producer.publish(expectedPositions);
+            producer.publish(messages);
         }
         long endProduceStartConsume = System.currentTimeMillis();
         List<String> actualPositions = new ArrayList<>(N);

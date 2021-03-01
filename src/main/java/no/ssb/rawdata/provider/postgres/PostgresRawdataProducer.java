@@ -3,7 +3,6 @@ package no.ssb.rawdata.provider.postgres;
 import de.huxhorn.sulky.ulid.ULID;
 import no.ssb.rawdata.api.RawdataClosedException;
 import no.ssb.rawdata.api.RawdataMessage;
-import no.ssb.rawdata.api.RawdataNotBufferedException;
 import no.ssb.rawdata.api.RawdataProducer;
 import no.ssb.rawdata.provider.postgres.tx.Transaction;
 import no.ssb.rawdata.provider.postgres.tx.TransactionFactory;
@@ -15,7 +14,6 @@ import java.util.Date;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -23,7 +21,6 @@ class PostgresRawdataProducer implements RawdataProducer {
 
     private final TransactionFactory transactionFactory;
     private final String topic;
-    private final Map<String, RawdataMessage.Builder> buffer = new ConcurrentHashMap<>();
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final ULID ulid = new ULID();
     private final AtomicReference<ULID.Value> previousIdRef = new AtomicReference<>(ulid.nextValue());
@@ -39,50 +36,25 @@ class PostgresRawdataProducer implements RawdataProducer {
     }
 
     @Override
-    public RawdataMessage.Builder builder() throws RawdataClosedException {
-        if (isClosed()) {
-            throw new RawdataClosedException();
-        }
-        return RawdataMessage.builder();
-    }
-
-    @Override
-    public RawdataProducer buffer(RawdataMessage.Builder builder) throws RawdataClosedException {
-        if (isClosed()) {
-            throw new RawdataClosedException();
-        }
-        buffer.put(builder.position(), builder);
-        return this;
-    }
-
-    @Override
-    public void publish(String... positions) throws RawdataClosedException, RawdataNotBufferedException {
-        for (String position : positions) {
-            if (!buffer.containsKey(position)) {
-                throw new RawdataNotBufferedException(String.format("position %s is not in buffer", position));
-            }
-        }
-
+    public void publish(RawdataMessage... messages) throws RawdataClosedException {
         try (Transaction tx = transactionFactory.createTransaction(false)) {
 
             try (PreparedStatement positionUpdate = tx.connection().prepareStatement(String.format("INSERT INTO \"%s_positions\" (ulid, ordering_group, sequence_number, position, ts) VALUES (?, ?, ?, ?, ?)", topic))) {
 
                 try (PreparedStatement contentUpdate = tx.connection().prepareStatement(String.format("INSERT INTO \"%s_content\" (ulid, name, data) VALUES (?, ?, ?)", topic))) {
 
-                    for (String position : positions) {
+                    for (RawdataMessage message : messages) {
 
-                        RawdataMessage.Builder builder = buffer.get(position);
-
-                        ULID.Value id = getOrGenerateNextUlid(builder);
+                        ULID.Value id = getOrGenerateNextUlid(message);
                         UUID uuid = new UUID(id.getMostSignificantBits(), id.getLeastSignificantBits());
 
                         /*
                          * position
                          */
                         positionUpdate.setObject(1, uuid);
-                        positionUpdate.setString(2, builder.orderingGroup());
-                        positionUpdate.setLong(3, builder.sequenceNumber());
-                        positionUpdate.setString(4, position);
+                        positionUpdate.setString(2, message.orderingGroup());
+                        positionUpdate.setLong(3, message.sequenceNumber());
+                        positionUpdate.setString(4, message.position());
                         positionUpdate.setTimestamp(5, Timestamp.from(new Date(id.timestamp()).toInstant()));
                         positionUpdate.addBatch();
 
@@ -90,7 +62,7 @@ class PostgresRawdataProducer implements RawdataProducer {
                          * content
                          */
 
-                        for (Map.Entry<String, byte[]> entry : builder.data().entrySet()) {
+                        for (Map.Entry<String, byte[]> entry : message.data().entrySet()) {
                             contentUpdate.setObject(1, uuid);
                             contentUpdate.setString(2, entry.getKey());
                             contentUpdate.setBytes(3, entry.getValue());
@@ -107,15 +79,10 @@ class PostgresRawdataProducer implements RawdataProducer {
         } catch (SQLException e) {
             throw new PersistenceException(e);
         }
-
-        // remove from buffer after successful database transaction
-        for (String position : positions) {
-            buffer.remove(position);
-        }
     }
 
-    private ULID.Value getOrGenerateNextUlid(RawdataMessage.Builder builder) {
-        ULID.Value id = builder.ulid();
+    private ULID.Value getOrGenerateNextUlid(RawdataMessage message) {
+        ULID.Value id = message.ulid();
         while (id == null) {
             ULID.Value previousUlid = previousIdRef.get();
             ULID.Value attemptedId = RawdataProducer.nextMonotonicUlid(this.ulid, previousUlid);
@@ -127,8 +94,8 @@ class PostgresRawdataProducer implements RawdataProducer {
     }
 
     @Override
-    public CompletableFuture<Void> publishAsync(String... positions) {
-        return CompletableFuture.runAsync(() -> publish(positions));
+    public CompletableFuture<Void> publishAsync(RawdataMessage... messages) {
+        return CompletableFuture.runAsync(() -> publish(messages));
     }
 
     @Override
